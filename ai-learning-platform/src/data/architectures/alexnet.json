@@ -1,0 +1,622 @@
+{
+  "id": "alexnet",
+  "name": "AlexNet",
+  "category": "cnn",
+  "subcategory": "Classic CNNs",
+  "year": 2012,
+  "authors": ["Alex Krizhevsky", "Ilya Sutskever", "Geoffrey Hinton"],
+  "paper": "ImageNet Classification with Deep Convolutional Neural Networks",
+  "paperUrl": "https://papers.nips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf",
+  "description": "AlexNet revolutionized computer vision by winning the 2012 ImageNet competition with a 15.3% top-5 error rate, crushing the second-place entry by over 10%. It demonstrated that deep CNNs trained on GPUs could achieve unprecedented accuracy on large-scale image classification, sparking the modern deep learning era and proving that bigger, deeper networks with more data produce dramatically better results.",
+  "plainEnglish": "AlexNet is the network that proved deep learning works at scale. Imagine you're teaching a computer to recognize 1,000 different objects (cats, cars, buildings, etc.) from millions of images. AlexNet uses 5 convolutional layers that act like increasingly sophisticated feature detectors: first layers spot edges and colors, middle layers recognize textures and patterns, and deep layers identify object parts (wheels, whiskers, windows). Then 3 fully-connected layers combine these features to make the final decision. The key innovations: 1) Using ReLU activation made it train 6× faster than old methods, 2) Training on 2 GPUs enabled handling huge datasets, 3) Dropout randomly turning off neurons prevented memorizing training data, and 4) Data augmentation (flipping, cropping images) made it robust to variations. It's like having a student who practices with millions of slightly different examples and learns to recognize the essence of objects rather than memorizing specific photos.",
+  "keyInnovation": "AlexNet's revolutionary contribution was proving the 'deep learning hypothesis' at scale: deeper networks (8 layers vs 3-4), massive datasets (1.2M ImageNet images), GPU training, ReLU activations, and aggressive regularization (dropout + data augmentation) could achieve superhuman performance on complex visual tasks. It popularized ReLU (replacing sigmoid/tanh), demonstrated dropout's effectiveness, and showed that GPU computing made training deep networks feasible. The paper's insights about depth, scale, and regularization became the blueprint for all modern computer vision systems including VGG, ResNet, and beyond.",
+  "architecture": {
+    "inputShape": [3, 224, 224],
+    "outputShape": [1000],
+    "layers": [
+      {
+        "type": "conv2d",
+        "name": "Conv1",
+        "description": "First convolutional layer - large 11×11 filters detect basic features at multiple scales",
+        "parameters": {
+          "filters": 96,
+          "kernelSize": [11, 11],
+          "stride": [4, 4],
+          "padding": "valid",
+          "activation": "relu"
+        },
+        "outputShape": [96, 55, 55],
+        "parameterCount": 34944
+      },
+      {
+        "type": "maxpool2d",
+        "name": "Pool1",
+        "description": "Max pooling - reduces spatial dimensions, provides local invariance",
+        "parameters": {
+          "poolSize": [3, 3],
+          "stride": [2, 2]
+        },
+        "outputShape": [96, 27, 27],
+        "parameterCount": 0
+      },
+      {
+        "type": "lrn",
+        "name": "LRN1",
+        "description": "Local Response Normalization - normalizes activations (less common in modern networks)",
+        "outputShape": [96, 27, 27],
+        "parameterCount": 0
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv2",
+        "description": "Second convolutional layer - refines features from first layer",
+        "parameters": {
+          "filters": 256,
+          "kernelSize": [5, 5],
+          "stride": [1, 1],
+          "padding": "same",
+          "activation": "relu"
+        },
+        "outputShape": [256, 27, 27],
+        "parameterCount": 614656
+      },
+      {
+        "type": "maxpool2d",
+        "name": "Pool2",
+        "description": "Second max pooling layer",
+        "parameters": {
+          "poolSize": [3, 3],
+          "stride": [2, 2]
+        },
+        "outputShape": [256, 13, 13],
+        "parameterCount": 0
+      },
+      {
+        "type": "lrn",
+        "name": "LRN2",
+        "description": "Second local response normalization",
+        "outputShape": [256, 13, 13],
+        "parameterCount": 0
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv3",
+        "description": "Third convolutional layer - learns mid-level features",
+        "parameters": {
+          "filters": 384,
+          "kernelSize": [3, 3],
+          "stride": [1, 1],
+          "padding": "same",
+          "activation": "relu"
+        },
+        "outputShape": [384, 13, 13],
+        "parameterCount": 885120
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv4",
+        "description": "Fourth convolutional layer - deepens feature hierarchy",
+        "parameters": {
+          "filters": 384,
+          "kernelSize": [3, 3],
+          "stride": [1, 1],
+          "padding": "same",
+          "activation": "relu"
+        },
+        "outputShape": [384, 13, 13],
+        "parameterCount": 1327488
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv5",
+        "description": "Fifth convolutional layer - highest-level convolutional features",
+        "parameters": {
+          "filters": 256,
+          "kernelSize": [3, 3],
+          "stride": [1, 1],
+          "padding": "same",
+          "activation": "relu"
+        },
+        "outputShape": [256, 13, 13],
+        "parameterCount": 884992
+      },
+      {
+        "type": "maxpool2d",
+        "name": "Pool3",
+        "description": "Final max pooling before fully connected layers",
+        "parameters": {
+          "poolSize": [3, 3],
+          "stride": [2, 2]
+        },
+        "outputShape": [256, 6, 6],
+        "parameterCount": 0
+      },
+      {
+        "type": "flatten",
+        "name": "Flatten",
+        "description": "Flatten 3D feature maps to 1D vector",
+        "outputShape": [9216],
+        "parameterCount": 0
+      },
+      {
+        "type": "dense",
+        "name": "FC1",
+        "description": "First fully connected layer with dropout - combines features for classification",
+        "parameters": {
+          "units": 4096,
+          "activation": "relu",
+          "dropout": 0.5
+        },
+        "outputShape": [4096],
+        "parameterCount": 37752832
+      },
+      {
+        "type": "dense",
+        "name": "FC2",
+        "description": "Second fully connected layer with dropout - further abstraction",
+        "parameters": {
+          "units": 4096,
+          "activation": "relu",
+          "dropout": 0.5
+        },
+        "outputShape": [4096],
+        "parameterCount": 16781312
+      },
+      {
+        "type": "dense",
+        "name": "Output",
+        "description": "Output layer - 1000 ImageNet classes",
+        "parameters": {
+          "units": 1000,
+          "activation": "softmax"
+        },
+        "outputShape": [1000],
+        "parameterCount": 4097000
+      }
+    ],
+    "depth": 8,
+    "parameters": 62378344,
+    "flops": "724M per image",
+    "memoryFootprint": "238 MB"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "ReLU Activation Function",
+        "latex": "f(x) = \\max(0, x) = \\begin{cases} x & \\text{if } x > 0 \\\\ 0 & \\text{if } x \\leq 0 \\end{cases}",
+        "explanation": "AlexNet popularized ReLU (Rectified Linear Unit), replacing sigmoid and tanh. ReLU is dead simple: positive values pass through unchanged, negative values become zero. This simplicity makes training 6× faster (no expensive exponentials) and helps avoid vanishing gradients in deep networks. The tradeoff: 'dying ReLU' problem where neurons can get stuck at zero, but this is rare with proper initialization.",
+        "variables": {
+          "x": "Pre-activation value (weighted sum + bias)",
+          "f(x)": "Activated output (always ≥ 0)"
+        }
+      },
+      {
+        "name": "Max Pooling",
+        "latex": "P_{i,j} = \\max_{0 \\leq a < k, \\ 0 \\leq b < k} X_{i \\cdot s + a, j \\cdot s + b}",
+        "explanation": "Unlike LeNet-5's average pooling, AlexNet uses max pooling: take the maximum value in each local region (3×3 window). This provides stronger translation invariance and helps the network focus on the most prominent features. Max pooling also creates a form of 'feature competition' where only the strongest activations survive.",
+        "variables": {
+          "P": "Pooled output at position (i,j)",
+          "k": "Pooling window size (3×3 in AlexNet)",
+          "s": "Stride (2 in AlexNet - overlapping pools)",
+          "X": "Input feature map"
+        }
+      },
+      {
+        "name": "Dropout During Training",
+        "latex": "\\tilde{h} = m \\odot h, \\quad m \\sim \\text{Bernoulli}(p)",
+        "explanation": "Dropout randomly sets activations to zero with probability p during training (0.5 in AlexNet's FC layers). This forces the network to learn redundant representations since it can't rely on any single neuron. At test time, all neurons are active but outputs are scaled by p. Think of it as training an ensemble of networks that share weights.",
+        "variables": {
+          "h": "Layer activations (before dropout)",
+          "m": "Binary mask (0 or 1 for each neuron)",
+          "p": "Keep probability (0.5 means keep 50% of neurons)",
+          "⊙": "Element-wise multiplication",
+          "h̃": "Activations after dropout"
+        }
+      },
+      {
+        "name": "Local Response Normalization (LRN)",
+        "latex": "b_{x,y}^i = a_{x,y}^i \\Big/ \\Big( k + \\alpha \\sum_{j=\\max(0,i-n/2)}^{\\min(N-1,i+n/2)} (a_{x,y}^j)^2 \\Big)^{\\beta}",
+        "explanation": "LRN normalizes each activation by the squared activations of nearby feature maps. The idea: create competition among neurons for large activations. In practice, LRN provided minimal benefit and modern networks (BatchNorm, LayerNorm) use better normalization techniques. Included here for historical accuracy.",
+        "variables": {
+          "a": "Activation before normalization at position (x,y) in feature map i",
+          "b": "Normalized activation",
+          "n": "Number of adjacent feature maps (5 in AlexNet)",
+          "k, α, β": "Hyperparameters (k=2, α=10⁻⁴, β=0.75 in AlexNet)"
+        }
+      },
+      {
+        "name": "Cross-Entropy Loss with 1000 Classes",
+        "latex": "L = -\\sum_{i=1}^{1000} y_i \\log(\\hat{y}_i) = -\\log(\\hat{y}_{\\text{true}})",
+        "explanation": "For ImageNet's 1000 classes, AlexNet uses cross-entropy loss. The second form is simpler: for a single correct class, the loss is just the negative log-probability of the true class. If the network is confident and correct (ŷ_true ≈ 1), loss ≈ 0. If wrong (ŷ_true ≈ 0), loss → ∞.",
+        "variables": {
+          "y": "True label (one-hot: all zeros except 1 at correct class)",
+          "ŷ": "Predicted probabilities from softmax (sum to 1)",
+          "L": "Loss value (lower is better)"
+        }
+      },
+      {
+        "name": "Momentum SGD",
+        "latex": "v_t = \\gamma v_{t-1} + \\eta \\nabla_{\\theta} L, \\quad \\theta_t = \\theta_{t-1} - v_t",
+        "explanation": "AlexNet used SGD with momentum (γ=0.9). Momentum accumulates gradients over time, accelerating in consistent directions and dampening oscillations. Think of a ball rolling downhill: it builds speed in consistent directions but slows when the gradient changes. This helps escape local minima and speeds up training on ImageNet's complex loss landscape.",
+        "variables": {
+          "v": "Velocity (accumulated gradient)",
+          "γ": "Momentum coefficient (0.9 in AlexNet)",
+          "η": "Learning rate (0.01 initially, divided by 10 when validation error plateaus)",
+          "∇_θ L": "Gradient of loss w.r.t. parameters θ",
+          "θ": "Model parameters"
+        }
+      },
+      {
+        "name": "Data Augmentation: Random Crop",
+        "latex": "I_{\\text{crop}} \\sim \\text{UniformCrop}(I_{256 \\times 256}, 224 \\times 224)",
+        "explanation": "AlexNet extracts random 224×224 patches from 256×256 images during training, increasing the dataset size by (256-224)² = 1024× per image. At test time, it uses 10 crops (4 corners + center, plus horizontal flips) and averages predictions. This simple augmentation dramatically improves generalization.",
+        "variables": {
+          "I": "Original image (resized to 256×256)",
+          "I_crop": "Random 224×224 crop for training"
+        }
+      },
+      {
+        "name": "Top-5 Error Rate",
+        "latex": "\\text{Top-5 Error} = \\mathbb{1}[y_{\\text{true}} \\notin \\text{Top-5}(\\hat{y})]",
+        "explanation": "ImageNet uses top-5 error: the model is correct if the true label appears in its top 5 predictions. AlexNet achieved 15.3% top-5 error on ImageNet 2012 validation set, crushing the 26.2% second-place entry. This metric is more forgiving than top-1 accuracy for tasks with many similar classes (e.g., 120 dog breeds).",
+        "variables": {
+          "y_true": "Ground truth class label",
+          "ŷ": "Predicted probability distribution",
+          "Top-5(ŷ)": "5 classes with highest predicted probabilities",
+          "𝟙": "Indicator function (1 if condition true, 0 otherwise)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "The Deep Learning Breakthrough",
+        "statement": "Deep CNNs (8 layers) with ReLU activations, trained on large datasets (1.2M images) using GPUs, and regularized with dropout and data augmentation, can achieve superhuman accuracy on complex visual tasks.",
+        "significance": "AlexNet's 2012 ImageNet victory empirically validated this statement, sparking the deep learning revolution. It showed that bigger networks, more data, and GPU training scale well together—principles that led to ResNet (152 layers), GPT (175B parameters), and modern AI."
+      },
+      {
+        "name": "ReLU Advantage",
+        "statement": "ReLU activation trains 6× faster than tanh/sigmoid for deep networks on ImageNet, while maintaining or improving accuracy.",
+        "significance": "AlexNet's paper empirically demonstrated ReLU's superiority. This popularized ReLU and variants (Leaky ReLU, ELU, GELU) became standard, enabling training of 100+ layer networks that would be impossible with sigmoid/tanh."
+      },
+      {
+        "name": "Dropout as Ensemble Learning",
+        "statement": "Dropout with p=0.5 in fully-connected layers approximates training an exponential ensemble of networks (2^N networks for N neurons), preventing overfitting without explicit regularization penalties.",
+        "significance": "Dropout became a standard technique after AlexNet, used in nearly all deep networks until BatchNorm partially replaced it. The ensemble perspective explains why dropout works and inspired variants like DropConnect and DropBlock."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass AlexNet(nn.Module):\n    def __init__(self, num_classes=1000):\n        super(AlexNet, self).__init__()\n        \n        # Feature extraction layers\n        self.features = nn.Sequential(\n            # Conv1: 3×224×224 -> 96×55×55\n            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),\n            nn.ReLU(inplace=True),\n            nn.MaxPool2d(kernel_size=3, stride=2),  # -> 96×27×27\n            \n            # Conv2: 96×27×27 -> 256×27×27\n            nn.Conv2d(96, 256, kernel_size=5, padding=2),\n            nn.ReLU(inplace=True),\n            nn.MaxPool2d(kernel_size=3, stride=2),  # -> 256×13×13\n            \n            # Conv3: 256×13×13 -> 384×13×13\n            nn.Conv2d(256, 384, kernel_size=3, padding=1),\n            nn.ReLU(inplace=True),\n            \n            # Conv4: 384×13×13 -> 384×13×13\n            nn.Conv2d(384, 384, kernel_size=3, padding=1),\n            nn.ReLU(inplace=True),\n            \n            # Conv5: 384×13×13 -> 256×13×13\n            nn.Conv2d(384, 256, kernel_size=3, padding=1),\n            nn.ReLU(inplace=True),\n            nn.MaxPool2d(kernel_size=3, stride=2),  # -> 256×6×6\n        )\n        \n        # Classifier layers\n        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))  # Ensures 6×6 output\n        \n        self.classifier = nn.Sequential(\n            nn.Dropout(p=0.5),\n            nn.Linear(256 * 6 * 6, 4096),\n            nn.ReLU(inplace=True),\n            \n            nn.Dropout(p=0.5),\n            nn.Linear(4096, 4096),\n            nn.ReLU(inplace=True),\n            \n            nn.Linear(4096, num_classes),\n        )\n    \n    def forward(self, x):\n        x = self.features(x)\n        x = self.avgpool(x)\n        x = torch.flatten(x, 1)\n        x = self.classifier(x)\n        return x\n\n# Create model\nmodel = AlexNet(num_classes=1000)\nprint(f\"Parameters: {sum(p.numel() for p in model.parameters()):,}\")\n\n# Test with random input\nx = torch.randn(1, 3, 224, 224)\noutput = model(x)\nprint(f\"Output shape: {output.shape}\")  # Should be [1, 1000]",
+      "training": "import torch\nimport torch.nn as nn\nimport torch.optim as optim\nfrom torchvision import datasets, transforms\nfrom torch.utils.data import DataLoader\nimport time\n\n# Data augmentation and preprocessing (AlexNet style)\ntrain_transform = transforms.Compose([\n    transforms.Resize(256),  # Resize to 256×256\n    transforms.RandomCrop(224),  # Random 224×224 crop\n    transforms.RandomHorizontalFlip(p=0.5),\n    transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),\n    transforms.ToTensor(),\n    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ImageNet stats\n])\n\nval_transform = transforms.Compose([\n    transforms.Resize(256),\n    transforms.CenterCrop(224),  # Center crop for validation\n    transforms.ToTensor(),\n    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])\n])\n\n# Load ImageNet (or use smaller dataset for demo)\n# Assuming you have ImageNet in 'data/imagenet'\ntrain_dataset = datasets.ImageFolder('data/imagenet/train', transform=train_transform)\nval_dataset = datasets.ImageFolder('data/imagenet/val', transform=val_transform)\n\ntrain_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=8, pin_memory=True)\nval_loader = DataLoader(val_dataset, batch_size=256, shuffle=False, num_workers=8, pin_memory=True)\n\n# Initialize model\ndevice = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\nmodel = AlexNet(num_classes=1000).to(device)\n\n# Loss and optimizer (AlexNet used SGD with momentum)\ncriterion = nn.CrossEntropyLoss()\noptimizer = optim.SGD(\n    model.parameters(),\n    lr=0.01,  # Initial learning rate\n    momentum=0.9,\n    weight_decay=5e-4  # L2 regularization\n)\n\n# Learning rate scheduler: reduce by 10× when validation error plateaus\nscheduler = optim.lr_scheduler.ReduceLROnPlateau(\n    optimizer, mode='min', factor=0.1, patience=3, verbose=True\n)\n\n# Training function\ndef train_epoch(epoch):\n    model.train()\n    running_loss = 0.0\n    correct = 0\n    total = 0\n    start_time = time.time()\n    \n    for batch_idx, (data, target) in enumerate(train_loader):\n        data, target = data.to(device), target.to(device)\n        \n        optimizer.zero_grad()\n        output = model(data)\n        loss = criterion(output, target)\n        loss.backward()\n        optimizer.step()\n        \n        running_loss += loss.item()\n        _, predicted = output.max(1)\n        total += target.size(0)\n        correct += predicted.eq(target).sum().item()\n        \n        if batch_idx % 100 == 0:\n            print(f'Epoch {epoch} [{batch_idx}/{len(train_loader)}] '\n                  f'Loss: {loss.item():.4f} | Acc: {100.*correct/total:.2f}%')\n    \n    epoch_time = time.time() - start_time\n    epoch_loss = running_loss / len(train_loader)\n    epoch_acc = 100. * correct / total\n    \n    print(f'\\nEpoch {epoch} Summary: Loss: {epoch_loss:.4f} | '\n          f'Acc: {epoch_acc:.2f}% | Time: {epoch_time:.1f}s')\n    \n    return epoch_loss, epoch_acc\n\n# Validation function\ndef validate():\n    model.eval()\n    val_loss = 0.0\n    correct_top1 = 0\n    correct_top5 = 0\n    total = 0\n    \n    with torch.no_grad():\n        for data, target in val_loader:\n            data, target = data.to(device), target.to(device)\n            output = model(data)\n            \n            loss = criterion(output, target)\n            val_loss += loss.item()\n            \n            # Top-1 accuracy\n            _, pred = output.max(1)\n            correct_top1 += pred.eq(target).sum().item()\n            \n            # Top-5 accuracy\n            _, pred_top5 = output.topk(5, 1, True, True)\n            correct_top5 += pred_top5.eq(target.view(-1, 1).expand_as(pred_top5)).sum().item()\n            \n            total += target.size(0)\n    \n    val_loss /= len(val_loader)\n    top1_acc = 100. * correct_top1 / total\n    top5_acc = 100. * correct_top5 / total\n    \n    print(f'Validation: Loss: {val_loss:.4f} | '\n          f'Top-1: {top1_acc:.2f}% | Top-5: {top5_acc:.2f}%\\n')\n    \n    return val_loss, top1_acc, top5_acc\n\n# Training loop (90 epochs as in original paper)\nprint(\"Starting AlexNet training...\\n\")\nbest_top5 = 0\n\nfor epoch in range(1, 91):\n    train_loss, train_acc = train_epoch(epoch)\n    val_loss, top1_acc, top5_acc = validate()\n    \n    # Update learning rate based on validation loss\n    scheduler.step(val_loss)\n    \n    # Save best model\n    if top5_acc > best_top5:\n        best_top5 = top5_acc\n        torch.save({\n            'epoch': epoch,\n            'model_state_dict': model.state_dict(),\n            'optimizer_state_dict': optimizer.state_dict(),\n            'top1_acc': top1_acc,\n            'top5_acc': top5_acc,\n        }, 'alexnet_best.pth')\n        print(f\"✓ Saved best model (Top-5: {top5_acc:.2f}%)\\n\")\n\nprint(f\"Training complete! Best Top-5 Accuracy: {best_top5:.2f}%\")",
+      "inference": "import torch\nimport torch.nn.functional as F\nfrom PIL import Image\nimport matplotlib.pyplot as plt\nimport json\n\n# Load ImageNet class labels\nwith open('imagenet_classes.json', 'r') as f:\n    class_labels = json.load(f)\n\ndef predict_image(model, image_path, device='cuda'):\n    \"\"\"Predict image class with top-5 predictions\"\"\"\n    # Load and preprocess image\n    img = Image.open(image_path).convert('RGB')\n    \n    # AlexNet preprocessing\n    transform = transforms.Compose([\n        transforms.Resize(256),\n        transforms.CenterCrop(224),\n        transforms.ToTensor(),\n        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])\n    ])\n    \n    img_tensor = transform(img).unsqueeze(0).to(device)\n    \n    # Inference\n    model.eval()\n    with torch.no_grad():\n        output = model(img_tensor)\n        probabilities = F.softmax(output, dim=1)\n        \n        # Top-5 predictions\n        top5_prob, top5_idx = probabilities.topk(5, dim=1)\n        top5_prob = top5_prob[0].cpu().numpy()\n        top5_idx = top5_idx[0].cpu().numpy()\n    \n    # Visualize results\n    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))\n    \n    # Show image\n    ax1.imshow(img)\n    ax1.set_title('Input Image', fontsize=14, fontweight='bold')\n    ax1.axis('off')\n    \n    # Show top-5 predictions\n    labels = [class_labels[idx] for idx in top5_idx]\n    colors = ['green'] + ['steelblue'] * 4  # Highlight top prediction\n    \n    y_pos = range(5)\n    ax2.barh(y_pos, top5_prob, color=colors)\n    ax2.set_yticks(y_pos)\n    ax2.set_yticklabels(labels)\n    ax2.set_xlabel('Confidence', fontsize=12)\n    ax2.set_title('Top-5 Predictions', fontsize=14, fontweight='bold')\n    ax2.invert_yaxis()\n    \n    # Add percentage labels\n    for i, prob in enumerate(top5_prob):\n        ax2.text(prob, i, f' {prob*100:.1f}%', va='center')\n    \n    plt.tight_layout()\n    plt.show()\n    \n    print(f\"\\nPrediction: {labels[0]} ({top5_prob[0]*100:.1f}% confidence)\\n\")\n    print(\"Top-5 Predictions:\")\n    for i, (label, prob) in enumerate(zip(labels, top5_prob), 1):\n        print(f\"{i}. {label:30s} {prob*100:5.2f}%\")\n    \n    return top5_idx, top5_prob\n\n# Load pre-trained AlexNet\nmodel = AlexNet(num_classes=1000)\ncheckpoint = torch.load('alexnet_best.pth')\nmodel.load_state_dict(checkpoint['model_state_dict'])\nmodel.to(device)\n\n# Or use torchvision's pretrained AlexNet\n# from torchvision.models import alexnet\n# model = alexnet(pretrained=True)\n\n# Predict\npredictions, confidences = predict_image(model, 'cat.jpg')"
+    },
+    "tensorflow": {
+      "minimal": "import tensorflow as tf\nfrom tensorflow import keras\nfrom tensorflow.keras import layers\n\ndef create_alexnet(num_classes=1000):\n    \"\"\"Create AlexNet model in TensorFlow/Keras\"\"\"\n    model = keras.Sequential([\n        # Conv1 + Pool1\n        layers.Conv2D(96, 11, strides=4, padding='same', activation='relu',\n                     input_shape=(224, 224, 3), name='conv1'),\n        layers.MaxPooling2D(3, strides=2, name='pool1'),\n        \n        # Conv2 + Pool2\n        layers.Conv2D(256, 5, padding='same', activation='relu', name='conv2'),\n        layers.MaxPooling2D(3, strides=2, name='pool2'),\n        \n        # Conv3\n        layers.Conv2D(384, 3, padding='same', activation='relu', name='conv3'),\n        \n        # Conv4\n        layers.Conv2D(384, 3, padding='same', activation='relu', name='conv4'),\n        \n        # Conv5 + Pool3\n        layers.Conv2D(256, 3, padding='same', activation='relu', name='conv5'),\n        layers.MaxPooling2D(3, strides=2, name='pool3'),\n        \n        # Flatten and FC layers\n        layers.Flatten(),\n        layers.Dropout(0.5),\n        layers.Dense(4096, activation='relu', name='fc1'),\n        layers.Dropout(0.5),\n        layers.Dense(4096, activation='relu', name='fc2'),\n        layers.Dense(num_classes, activation='softmax', name='output'),\n    ], name='AlexNet')\n    \n    return model\n\n# Create model\nmodel = create_alexnet()\nmodel.summary()\n\nprint(f\"\\nTotal parameters: {model.count_params():,}\")",
+      "training": "import tensorflow as tf\nfrom tensorflow import keras\nimport numpy as np\n\n# Data augmentation (AlexNet style)\ntrain_datagen = keras.preprocessing.image.ImageDataGenerator(\n    rescale=1./255,\n    rotation_range=10,\n    width_shift_range=0.1,\n    height_shift_range=0.1,\n    horizontal_flip=True,\n    zoom_range=0.1,\n    preprocessing_function=keras.applications.imagenet_utils.preprocess_input\n)\n\nval_datagen = keras.preprocessing.image.ImageDataGenerator(\n    rescale=1./255,\n    preprocessing_function=keras.applications.imagenet_utils.preprocess_input\n)\n\n# Load ImageNet dataset\ntrain_generator = train_datagen.flow_from_directory(\n    'data/imagenet/train',\n    target_size=(224, 224),\n    batch_size=256,\n    class_mode='categorical'\n)\n\nval_generator = val_datagen.flow_from_directory(\n    'data/imagenet/val',\n    target_size=(224, 224),\n    batch_size=256,\n    class_mode='categorical',\n    shuffle=False\n)\n\n# Create model\nmodel = create_alexnet(num_classes=1000)\n\n# Compile with SGD + momentum (as in original paper)\noptimizer = keras.optimizers.SGD(\n    learning_rate=0.01,\n    momentum=0.9,\n    decay=5e-4\n)\n\nmodel.compile(\n    optimizer=optimizer,\n    loss='categorical_crossentropy',\n    metrics=['accuracy', keras.metrics.TopKCategoricalAccuracy(k=5, name='top5_acc')]\n)\n\n# Callbacks\ncallbacks = [\n    keras.callbacks.ReduceLROnPlateau(\n        monitor='val_loss',\n        factor=0.1,\n        patience=3,\n        verbose=1,\n        min_lr=1e-6\n    ),\n    keras.callbacks.ModelCheckpoint(\n        'alexnet_best.h5',\n        monitor='val_top5_acc',\n        save_best_only=True,\n        verbose=1\n    ),\n    keras.callbacks.EarlyStopping(\n        monitor='val_top5_acc',\n        patience=10,\n        restore_best_weights=True\n    ),\n    keras.callbacks.TensorBoard(\n        log_dir='logs/alexnet',\n        histogram_freq=1\n    )\n]\n\n# Train model (90 epochs as in paper)\nhistory = model.fit(\n    train_generator,\n    epochs=90,\n    validation_data=val_generator,\n    callbacks=callbacks,\n    verbose=1\n)\n\n# Evaluate\nresults = model.evaluate(val_generator)\nprint(f\"\\nFinal Results:\")\nprint(f\"Top-1 Accuracy: {results[1]*100:.2f}%\")\nprint(f\"Top-5 Accuracy: {results[2]*100:.2f}%\")",
+      "inference": "import tensorflow as tf\nfrom tensorflow import keras\nimport numpy as np\nfrom PIL import Image\nimport matplotlib.pyplot as plt\nimport json\n\n# Load model\nmodel = keras.models.load_model('alexnet_best.h5')\n\n# Load ImageNet labels\nwith open('imagenet_labels.json') as f:\n    labels = json.load(f)\n\ndef predict_top5(image_path):\n    \"\"\"Predict with top-5 results\"\"\"\n    # Load and preprocess\n    img = Image.open(image_path).convert('RGB')\n    img = img.resize((224, 224))\n    img_array = np.array(img) / 255.0\n    img_array = np.expand_dims(img_array, axis=0)\n    \n    # Predict\n    predictions = model.predict(img_array)[0]\n    top5_idx = predictions.argsort()[-5:][::-1]\n    top5_prob = predictions[top5_idx]\n    \n    # Visualize\n    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))\n    \n    ax1.imshow(img)\n    ax1.axis('off')\n    ax1.set_title('Input Image')\n    \n    ax2.barh(range(5), top5_prob)\n    ax2.set_yticks(range(5))\n    ax2.set_yticklabels([labels[i] for i in top5_idx])\n    ax2.set_xlabel('Confidence')\n    ax2.set_title('Top-5 Predictions')\n    ax2.invert_yaxis()\n    \n    plt.tight_layout()\n    plt.show()\n    \n    return top5_idx, top5_prob\n\n# Example\ntop5_idx, top5_prob = predict_top5('sample.jpg')\nfor i, (idx, prob) in enumerate(zip(top5_idx, top5_prob), 1):\n    print(f\"{i}. {labels[idx]:30s} {prob*100:5.2f}%\")"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Image Classification",
+      "application": "Large-scale visual recognition (ImageNet, 1000 categories)",
+      "description": "AlexNet's primary application: classifying images into 1000 categories (animals, objects, scenes). It demonstrated that deep learning could surpass traditional computer vision methods on complex, real-world datasets. The 15.3% top-5 error was a breakthrough that sparked the deep learning revolution.",
+      "realWorldExample": "Google Photos uses AlexNet-inspired CNNs to automatically categorize and search through billions of user photos. Facebook's photo tagging suggestions evolved from AlexNet-style networks."
+    },
+    {
+      "domain": "Transfer Learning",
+      "application": "Feature extraction for custom vision tasks",
+      "description": "AlexNet's convolutional layers learn general visual features (edges, textures, object parts) useful for many tasks. Remove the final layer, freeze conv layers, and retrain FC layers on your custom dataset (e.g., medical images, satellite imagery). Requires far less data than training from scratch.",
+      "realWorldExample": "Medical imaging startups use ImageNet-pretrained AlexNet as a starting point for chest X-ray analysis, skin lesion classification, and retinal disease detection, achieving good results with only thousands of images instead of millions."
+    },
+    {
+      "domain": "Object Detection",
+      "application": "Bounding box regression and object localization",
+      "description": "AlexNet serves as the backbone for R-CNN (Regions with CNN), the pioneering object detection system. R-CNN proposes 2000 regions per image, runs AlexNet on each, and classifies objects with bounding boxes. Later evolved into Fast R-CNN, Faster R-CNN, and YOLO.",
+      "realWorldExample": "Self-driving cars use AlexNet-derived architectures to detect pedestrians, vehicles, and traffic signs in real-time camera feeds. Amazon warehouses use CNN-based object detection for package sorting."
+    },
+    {
+      "domain": "Image Retrieval and Similarity",
+      "application": "Content-based image search",
+      "description": "Use AlexNet's FC6 or FC7 layer activations (4096-dimensional vectors) as image embeddings. Similar images have similar embeddings. Build search engines by computing cosine similarity between query and database embeddings.",
+      "realWorldExample": "Pinterest's visual search (\"More Like This\") uses CNN embeddings to find visually similar pins. E-commerce sites like Amazon let you search products by uploading photos."
+    },
+    {
+      "domain": "Art and Style Transfer",
+      "application": "Artistic style rendering and neural style transfer",
+      "description": "AlexNet's intermediate layers capture style (textures, colors) and content (objects, structure) separately. Neural style transfer optimizes an image to match content from one image and style from another. This spawned apps like Prisma and DeepArt.",
+      "realWorldExample": "The Prisma app (2016) went viral by applying artistic styles to photos using AlexNet-style CNNs. Modern photo editing apps (Photoshop Neural Filters) use similar techniques."
+    },
+    {
+      "domain": "Video Classification",
+      "application": "Action recognition in videos",
+      "description": "Apply AlexNet to individual video frames, then aggregate predictions over time (averaging, LSTM). Can classify actions (running, jumping) and events (sports, concerts). Two-stream networks use AlexNet on both RGB frames and optical flow.",
+      "realWorldExample": "YouTube's content moderation system uses CNN-based video classification to detect inappropriate content. Sports analytics companies use it to automatically tag game highlights."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "ImageNet ILSVRC 2012",
+        "accuracy": 63.3,
+        "otherMetrics": {
+          "top5_accuracy": "84.7%",
+          "top5_error": "15.3%",
+          "training_time": "5-6 days on 2× GTX 580 GPUs",
+          "parameters": "61M",
+          "dataset_size": "1.2M training images, 1000 classes"
+        }
+      },
+      {
+        "name": "ImageNet ILSVRC 2012 (Validation)",
+        "accuracy": 57.1,
+        "otherMetrics": {
+          "top5_accuracy": "80.3%",
+          "top5_error": "19.7%",
+          "note": "Single model, single crop"
+        }
+      },
+      {
+        "name": "ImageNet ILSVRC 2012 (Test - Competition)",
+        "accuracy": "Not reported",
+        "otherMetrics": {
+          "top5_error": "15.3%",
+          "winning_margin": "10.8% (2nd place: 26.2%)",
+          "ensemble": "7 CNNs ensemble for competition"
+        }
+      },
+      {
+        "name": "CIFAR-10",
+        "accuracy": 89.0,
+        "otherMetrics": {
+          "error_rate": "11.0%",
+          "training_time": "~2 hours",
+          "note": "AlexNet adapted for 32×32 images"
+        }
+      },
+      {
+        "name": "CIFAR-100",
+        "accuracy": 66.4,
+        "otherMetrics": {
+          "error_rate": "33.6%",
+          "top5_accuracy": "86.2%",
+          "note": "100 fine-grained classes"
+        }
+      }
+    ],
+    "comparison": [
+      {
+        "model": "Traditional CV (SIFT + SVM, 2011)",
+        "parameters": "N/A",
+        "imagenetTop5Error": 26.2,
+        "year": 2011
+      },
+      {
+        "model": "AlexNet (2012)",
+        "parameters": "61M",
+        "imagenetTop5Error": 15.3,
+        "year": 2012
+      },
+      {
+        "model": "VGG-16 (2014)",
+        "parameters": "138M",
+        "imagenetTop5Error": 7.3,
+        "year": 2014
+      },
+      {
+        "model": "ResNet-152 (2015)",
+        "parameters": "60M",
+        "imagenetTop5Error": 3.57,
+        "year": 2015
+      }
+    ]
+  },
+  "trainingTips": {
+    "initialization": [
+      {
+        "technique": "Gaussian Initialization",
+        "description": "Original AlexNet used Gaussian initialization: weights ~ N(0, 0.01), biases = 0 for most layers. Conv2, Conv4, Conv5, and all FC layers had bias = 1.",
+        "code": "nn.init.normal_(layer.weight, mean=0, std=0.01)\nnn.init.constant_(layer.bias, 1)"
+      },
+      {
+        "technique": "Modern: Kaiming/He Initialization",
+        "description": "Use Kaiming initialization for ReLU networks. It scales weights by sqrt(2/fan_in), preventing vanishing/exploding activations in deep networks. PyTorch uses this by default for Conv and Linear layers.",
+        "code": "nn.init.kaiming_normal_(layer.weight, mode='fan_in', nonlinearity='relu')"
+      }
+    ],
+    "hyperparameters": [
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.01 initially, reduce by 10× when validation error plateaus",
+        "rationale": "Original AlexNet started at 0.01 and manually reduced by 10× three times during training. Use ReduceLROnPlateau scheduler for automatic adjustment."
+      },
+      {
+        "parameter": "Batch Size",
+        "recommendedValue": "128-256 (depends on GPU memory)",
+        "rationale": "Original used 128. Modern GPUs can handle 256-512. Larger batches stabilize training but may hurt generalization. Scale learning rate linearly with batch size."
+      },
+      {
+        "parameter": "Weight Decay (L2)",
+        "recommendedValue": "5e-4 (0.0005)",
+        "rationale": "Original AlexNet value. Prevents overfitting by penalizing large weights. Critical for ImageNet-scale datasets."
+      },
+      {
+        "parameter": "Momentum",
+        "recommendedValue": "0.9",
+        "rationale": "Standard momentum value. Helps accelerate SGD in relevant directions and dampens oscillations."
+      },
+      {
+        "parameter": "Dropout Rate",
+        "recommendedValue": "0.5 in FC layers",
+        "rationale": "Original AlexNet used p=0.5 dropout in FC1 and FC2. Don't use dropout in convolutional layers."
+      },
+      {
+        "parameter": "Training Epochs",
+        "recommendedValue": "90 epochs (ImageNet)",
+        "rationale": "Original trained for 90 epochs over 1.2M images. Use early stopping if validation accuracy plateaus."
+      }
+    ],
+    "regularization": [
+      {
+        "technique": "Dropout (p=0.5)",
+        "description": "AlexNet's most important regularization. Randomly drop 50% of neurons in FC1 and FC2 during training. Prevents co-adaptation of neurons and acts like ensemble learning.",
+        "code": "nn.Dropout(p=0.5)  # Between FC layers only"
+      },
+      {
+        "technique": "Data Augmentation: Random Crops",
+        "description": "Extract random 224×224 patches from 256×256 images during training. This increases dataset size by 1024× per image and provides translation invariance.",
+        "code": "transforms.Resize(256)\ntransforms.RandomCrop(224)"
+      },
+      {
+        "technique": "Data Augmentation: Horizontal Flips",
+        "description": "Randomly flip images horizontally with 50% probability. Doubles effective dataset size and provides reflection invariance.",
+        "code": "transforms.RandomHorizontalFlip(p=0.5)"
+      },
+      {
+        "technique": "Data Augmentation: PCA Color Jittering",
+        "description": "AlexNet's sophisticated augmentation: add multiples of principal components of RGB pixel values with magnitudes from N(0, 0.1). Provides illumination invariance. Reduced top-1 error by >1%.",
+        "code": "transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1)"
+      },
+      {
+        "technique": "L2 Weight Decay",
+        "description": "Add penalty term 5e-4 * ||W||² to loss. Encourages small weights, preventing overfitting.",
+        "code": "optimizer = optim.SGD(model.parameters(), weight_decay=5e-4)"
+      }
+    ],
+    "commonMistakes": [
+      {
+        "mistake": "Using BatchNorm",
+        "description": "Original AlexNet had no BatchNorm (invented in 2015). Adding it changes the architecture and makes it train faster but less historically accurate. LRN (Local Response Normalization) was used instead, though it's mostly obsolete now.",
+        "fix": "For historical accuracy, omit BatchNorm. For best performance, add BatchNorm after each conv layer."
+      },
+      {
+        "mistake": "Wrong Input Size",
+        "description": "AlexNet expects 224×224×3 RGB images. Feeding 32×32 (CIFAR-10) or 28×28 (MNIST) requires architecture modifications.",
+        "fix": "Resize images to 224×224 or adapt the architecture (reduce stride, remove pooling layers for small images)."
+      },
+      {
+        "mistake": "Not Using Data Augmentation",
+        "description": "AlexNet heavily relies on data augmentation to prevent overfitting on ImageNet. Without it, validation accuracy will be much worse.",
+        "fix": "Always use random crops, horizontal flips, and color jittering for ImageNet-scale datasets."
+      },
+      {
+        "mistake": "Training Too Fast (High LR)",
+        "description": "AlexNet used conservative 0.01 learning rate. Higher rates (>0.1) can cause training instability or divergence.",
+        "fix": "Start with 0.01 for SGD. If using Adam, reduce to 0.001."
+      },
+      {
+        "mistake": "Not Reducing Learning Rate",
+        "description": "AlexNet reduced LR by 10× manually when validation error plateaued. Without this, training stagnates.",
+        "fix": "Use ReduceLROnPlateau scheduler to automatically reduce LR when validation loss stops improving."
+      },
+      {
+        "mistake": "Insufficient Training Time",
+        "description": "AlexNet needs 90 epochs on ImageNet. Stopping at 20-30 epochs leaves significant accuracy on the table.",
+        "fix": "Train for at least 90 epochs, use early stopping only if validation accuracy clearly plateaus."
+      }
+    ],
+    "optimization": [
+      {
+        "technique": "Multi-GPU Training",
+        "description": "AlexNet was designed for 2 GPUs, splitting feature maps across GPUs. Modern practice uses DataParallel or DistributedDataParallel for multi-GPU training.",
+        "code": "model = nn.DataParallel(model, device_ids=[0, 1])"
+      },
+      {
+        "technique": "Mixed Precision Training (Modern)",
+        "description": "Use FP16 for forward/backward passes, FP32 for weight updates. Speeds up training 2-3× on modern GPUs (V100, A100) without accuracy loss.",
+        "code": "from torch.cuda.amp import autocast, GradScaler\nscaler = GradScaler()\nwith autocast():\n    loss = criterion(model(data), target)"
+      },
+      {
+        "technique": "Gradient Accumulation",
+        "description": "If GPU memory is limited (can't fit batch size 256), accumulate gradients over multiple forward passes before updating weights.",
+        "code": "# Accumulate over 4 batches\nif (batch_idx + 1) % 4 == 0:\n    optimizer.step()\n    optimizer.zero_grad()"
+      }
+    ]
+  },
+  "comparisons": ["lenet5", "vgg16", "resnet50", "googlenet"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "ImageNet Classification with Deep Convolutional Neural Networks",
+      "url": "https://papers.nips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf",
+      "description": "The original 2012 NIPS paper by Krizhevsky, Sutskever, and Hinton. This 9-page paper changed computer vision forever. Essential reading for understanding why AlexNet worked and the insights that drove the deep learning revolution."
+    },
+    {
+      "type": "video",
+      "title": "ImageNet: The Data That Transformed AI",
+      "url": "https://www.youtube.com/watch?v=40riCqvRoMs",
+      "description": "Documentary about ImageNet and the 2012 competition. Features interviews with Fei-Fei Li (ImageNet creator) and discusses AlexNet's breakthrough. Great context for understanding the significance."
+    },
+    {
+      "type": "blog",
+      "title": "AlexNet Implementation from Scratch",
+      "url": "https://www.deeplearningbook.org/",
+      "description": "Detailed walkthrough of implementing AlexNet in PyTorch and TensorFlow with explanations of each component."
+    },
+    {
+      "type": "code",
+      "title": "Official PyTorch AlexNet",
+      "url": "https://github.com/pytorch/vision/blob/main/torchvision/models/alexnet.py",
+      "description": "Reference implementation in torchvision. Well-documented and includes pretrained weights on ImageNet."
+    },
+    {
+      "type": "tutorial",
+      "title": "Stanford CS231n: CNNs for Visual Recognition (Lecture 9)",
+      "url": "http://cs231n.stanford.edu/",
+      "description": "Comprehensive lecture covering AlexNet in detail, including architectural choices, training tricks, and historical impact."
+    },
+    {
+      "type": "article",
+      "title": "The Neural Network That Sparked the AI Revolution",
+      "url": "https://www.wired.com/story/",
+      "description": "Wired article on AlexNet's impact. Non-technical overview of how it changed AI research and industry."
+    },
+    {
+      "type": "interactive",
+      "title": "AlexNet Visualization (CNN Explainer)",
+      "url": "https://poloclub.github.io/cnn-explainer/",
+      "description": "Interactive tool to visualize what each layer of AlexNet learns. See feature maps and activations in real-time."
+    },
+    {
+      "type": "dataset",
+      "title": "ImageNet Large Scale Visual Recognition Challenge (ILSVRC)",
+      "url": "https://image-net.org/challenges/LSVRC/",
+      "description": "Official ImageNet competition page with historical results, dataset info, and leaderboards showing AlexNet's 2012 victory."
+    }
+  ],
+  "tags": [
+    "cnn",
+    "computer-vision",
+    "image-classification",
+    "imagenet",
+    "deep-learning-revolution",
+    "relu",
+    "dropout",
+    "data-augmentation",
+    "gpu-training",
+    "alex-krizhevsky",
+    "geoffrey-hinton",
+    "2012",
+    "breakthrough",
+    "transfer-learning",
+    "ilsvrc"
+  ],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (training with batch size 32)",
+    "recommendedVRAM": "8-12 GB (batch size 128-256)",
+    "minimumRAM": "16 GB",
+    "trainingTime": {
+      "cpu": "Not practical (weeks for ImageNet)",
+      "gpu": "5-6 days on GTX 580 (2012), 12-24 hours on modern GPU (RTX 3090, V100)",
+      "multi_gpu": "6-12 hours on 4× V100 or A100"
+    },
+    "inferenceSpeed": {
+      "cpu": "~20 images/second",
+      "gpu": "~500 images/second (single GPU)",
+      "batch_inference": "~2000 images/second (batch size 256, GPU)"
+    },
+    "storageRequirements": "238 MB (model weights), 150 GB (ImageNet dataset)"
+  }
+}

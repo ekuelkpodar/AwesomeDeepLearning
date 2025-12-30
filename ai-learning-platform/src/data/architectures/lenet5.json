@@ -1,0 +1,488 @@
+{
+  "id": "lenet5",
+  "name": "LeNet-5",
+  "category": "cnn",
+  "subcategory": "Classic CNNs",
+  "year": 1998,
+  "authors": ["Yann LeCun", "Léon Bottou", "Yoshua Bengio", "Patrick Haffner"],
+  "paper": "Gradient-Based Learning Applied to Document Recognition",
+  "paperUrl": "http://yann.lecun.com/exdb/publis/pdf/lecun-01a.pdf",
+  "description": "LeNet-5 is a pioneering convolutional neural network designed for handwritten digit recognition. It established the fundamental CNN architecture pattern: convolution → pooling → convolution → pooling → fully connected layers. Despite being created in 1998, its design principles remain the foundation of modern computer vision systems.",
+  "plainEnglish": "Imagine teaching a computer to read handwritten numbers by showing it small features (edges, curves) first, then combining them into larger patterns (loops, strokes), and finally recognizing complete digits. LeNet-5 does exactly this using three types of layers: 1) Convolutional layers act like feature detectors scanning the image with small filters, 2) Pooling layers reduce the image size while keeping important features, and 3) Fully connected layers at the end make the final decision about which digit (0-9) it is. It's like having multiple magnifying glasses of different sizes, each looking for specific patterns in your handwriting.",
+  "keyInnovation": "LeNet-5's groundbreaking innovation was demonstrating that convolutional layers with weight sharing could learn hierarchical spatial features automatically from raw pixels, eliminating the need for hand-crafted feature engineering. It proved that backpropagation could train deep networks with convolution and pooling operations, establishing the architectural pattern (conv-pool-conv-pool-fc) that became the blueprint for all modern CNNs including AlexNet, VGG, and ResNet.",
+  "architecture": {
+    "inputShape": [1, 32, 32],
+    "outputShape": [10],
+    "layers": [
+      {
+        "type": "conv2d",
+        "name": "C1",
+        "description": "First convolutional layer - detects low-level features like edges and corners",
+        "parameters": {
+          "filters": 6,
+          "kernelSize": [5, 5],
+          "stride": [1, 1],
+          "padding": "valid",
+          "activation": "tanh"
+        },
+        "outputShape": [6, 28, 28],
+        "parameterCount": 156
+      },
+      {
+        "type": "avgpool2d",
+        "name": "S2",
+        "description": "Subsampling layer - reduces spatial dimensions while retaining important features",
+        "parameters": {
+          "poolSize": [2, 2],
+          "stride": [2, 2]
+        },
+        "outputShape": [6, 14, 14],
+        "parameterCount": 12
+      },
+      {
+        "type": "conv2d",
+        "name": "C3",
+        "description": "Second convolutional layer - combines low-level features into mid-level patterns",
+        "parameters": {
+          "filters": 16,
+          "kernelSize": [5, 5],
+          "stride": [1, 1],
+          "padding": "valid",
+          "activation": "tanh"
+        },
+        "outputShape": [16, 10, 10],
+        "parameterCount": 2416
+      },
+      {
+        "type": "avgpool2d",
+        "name": "S4",
+        "description": "Second subsampling layer - further dimension reduction",
+        "parameters": {
+          "poolSize": [2, 2],
+          "stride": [2, 2]
+        },
+        "outputShape": [16, 5, 5],
+        "parameterCount": 32
+      },
+      {
+        "type": "conv2d",
+        "name": "C5",
+        "description": "Third convolutional layer - extracts high-level features (effectively fully connected due to 5x5 input)",
+        "parameters": {
+          "filters": 120,
+          "kernelSize": [5, 5],
+          "stride": [1, 1],
+          "padding": "valid",
+          "activation": "tanh"
+        },
+        "outputShape": [120, 1, 1],
+        "parameterCount": 48120
+      },
+      {
+        "type": "flatten",
+        "name": "Flatten",
+        "description": "Flatten the 3D tensor to 1D vector for fully connected layers",
+        "outputShape": [120],
+        "parameterCount": 0
+      },
+      {
+        "type": "dense",
+        "name": "F6",
+        "description": "First fully connected layer - combines all features for classification",
+        "parameters": {
+          "units": 84,
+          "activation": "tanh"
+        },
+        "outputShape": [84],
+        "parameterCount": 10164
+      },
+      {
+        "type": "dense",
+        "name": "Output",
+        "description": "Output layer - produces probabilities for 10 digit classes",
+        "parameters": {
+          "units": 10,
+          "activation": "softmax"
+        },
+        "outputShape": [10],
+        "parameterCount": 850
+      }
+    ],
+    "depth": 8,
+    "parameters": 61706,
+    "flops": "341K per image",
+    "memoryFootprint": "241 KB"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "2D Convolution Operation",
+        "latex": "Y_{i,j} = \\sum_{m=0}^{k-1} \\sum_{n=0}^{k-1} W_{m,n} \\cdot X_{i+m, j+n} + b",
+        "explanation": "The fundamental operation in CNNs. A kernel (filter) W of size k×k slides across the input image X, computing dot products at each position (i,j) and adding a bias b. This operation detects specific patterns like edges, corners, or textures. Each filter learns to recognize different features.",
+        "variables": {
+          "Y": "Output feature map at position (i,j)",
+          "W": "Learnable filter/kernel weights (5×5 in LeNet-5)",
+          "X": "Input image or feature map",
+          "b": "Learnable bias term",
+          "k": "Kernel size (5 for C1 and C3 layers)"
+        }
+      },
+      {
+        "name": "Average Pooling",
+        "latex": "P_{i,j} = \\frac{1}{n \\times m} \\sum_{a=0}^{n-1} \\sum_{b=0}^{m-1} X_{i \\cdot s + a, j \\cdot s + b}",
+        "explanation": "Pooling reduces the spatial dimensions by averaging values in local regions (2×2 windows in LeNet-5). This operation provides translation invariance, reduces computation, and prevents overfitting by summarizing local features. LeNet-5 used average pooling, though modern CNNs prefer max pooling.",
+        "variables": {
+          "P": "Pooled output at position (i,j)",
+          "n, m": "Pooling window size (2×2 in LeNet-5)",
+          "s": "Stride (2 in LeNet-5)",
+          "X": "Input feature map"
+        }
+      },
+      {
+        "name": "Tanh Activation Function",
+        "latex": "\\tanh(x) = \\frac{e^x - e^{-x}}{e^x + e^{-x}} = \\frac{e^{2x} - 1}{e^{2x} + 1}",
+        "explanation": "The hyperbolic tangent function used in original LeNet-5. It squashes values to the range [-1, 1], providing non-linearity essential for learning complex patterns. While ReLU has largely replaced tanh in modern networks, tanh was standard in the 1990s and works well for shallow networks.",
+        "variables": {
+          "x": "Pre-activation value (weighted sum)",
+          "tanh(x)": "Activated output in range [-1, 1]"
+        }
+      },
+      {
+        "name": "Softmax Output",
+        "latex": "\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^{K} e^{z_j}}",
+        "explanation": "The softmax function converts the final layer's raw scores (logits) into a probability distribution over the 10 digit classes. Each output represents the probability that the input image belongs to that digit class (0-9). The sum of all outputs equals 1.",
+        "variables": {
+          "z": "Logits vector (raw scores from final layer)",
+          "K": "Number of classes (10 for digits 0-9)",
+          "σ(z)_i": "Probability of class i"
+        }
+      },
+      {
+        "name": "Cross-Entropy Loss",
+        "latex": "L = -\\sum_{i=1}^{K} y_i \\log(\\hat{y}_i)",
+        "explanation": "The loss function used to train LeNet-5. It measures the difference between the predicted probability distribution (ŷ) and the true label (y, one-hot encoded). Lower loss means better predictions. Gradients of this loss are backpropagated through the network to update weights.",
+        "variables": {
+          "y": "True label (one-hot encoded, e.g., [0,0,0,1,0,0,0,0,0,0] for digit 3)",
+          "ŷ": "Predicted probabilities from softmax",
+          "K": "Number of classes (10)",
+          "L": "Loss value (0 = perfect prediction)"
+        }
+      },
+      {
+        "name": "Parameter Count for Convolutional Layer",
+        "latex": "\\text{Params} = (k_h \\times k_w \\times C_{in} + 1) \\times C_{out}",
+        "explanation": "Formula to calculate the number of trainable parameters in a convolutional layer. For C1 layer: (5×5×1 + 1)×6 = 156 parameters. The +1 accounts for the bias term per filter. Despite having 6 feature maps, weight sharing keeps parameter count low compared to fully connected layers.",
+        "variables": {
+          "k_h, k_w": "Kernel height and width (5×5 in LeNet-5)",
+          "C_in": "Number of input channels (1 for grayscale MNIST)",
+          "C_out": "Number of output filters/channels",
+          "Params": "Total trainable parameters"
+        }
+      },
+      {
+        "name": "Receptive Field",
+        "latex": "r_l = r_{l-1} + (k_l - 1) \\times \\prod_{i=1}^{l-1} s_i",
+        "explanation": "The receptive field is the region of the input image that affects a particular neuron in layer l. As we go deeper in the network, neurons 'see' increasingly larger portions of the input. This allows the network to learn hierarchical features from local (edges) to global (digits).",
+        "variables": {
+          "r_l": "Receptive field size at layer l",
+          "k_l": "Kernel size at layer l",
+          "s_i": "Stride at layer i",
+          "l": "Layer index"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Weight Sharing in CNNs",
+        "statement": "Convolutional layers use the same weights (filters) across all spatial locations, dramatically reducing parameters compared to fully connected layers while maintaining translation invariance.",
+        "significance": "For a 28×28 image, a fully connected layer with 6 outputs would need 28×28×6 = 4,704 parameters. LeNet-5's C1 layer achieves the same with only 156 parameters (30× reduction). This makes CNNs feasible to train and naturally invariant to the position of features."
+      },
+      {
+        "name": "Hierarchical Feature Learning",
+        "statement": "Stacking convolutional layers enables automatic learning of increasingly abstract features: edges → textures → parts → objects.",
+        "significance": "LeNet-5 demonstrated that deep networks could learn feature hierarchies automatically through backpropagation, eliminating the need for hand-engineered features that dominated computer vision before 2012."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass LeNet5(nn.Module):\n    def __init__(self):\n        super(LeNet5, self).__init__()\n        # Convolutional layers\n        self.conv1 = nn.Conv2d(1, 6, kernel_size=5)  # C1: 1@32x32 -> 6@28x28\n        self.conv2 = nn.Conv2d(6, 16, kernel_size=5)  # C3: 6@14x14 -> 16@10x10\n        self.conv3 = nn.Conv2d(16, 120, kernel_size=5)  # C5: 16@5x5 -> 120@1x1\n        \n        # Pooling layer\n        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)\n        \n        # Fully connected layers\n        self.fc1 = nn.Linear(120, 84)  # F6\n        self.fc2 = nn.Linear(84, 10)  # Output\n        \n        # Activation (original used tanh)\n        self.tanh = nn.Tanh()\n    \n    def forward(self, x):\n        # C1 + S2\n        x = self.tanh(self.conv1(x))  # -> 6@28x28\n        x = self.pool(x)  # -> 6@14x14\n        \n        # C3 + S4\n        x = self.tanh(self.conv2(x))  # -> 16@10x10\n        x = self.pool(x)  # -> 16@5x5\n        \n        # C5\n        x = self.tanh(self.conv3(x))  # -> 120@1x1\n        \n        # Flatten and FC layers\n        x = x.view(-1, 120)\n        x = self.tanh(self.fc1(x))  # -> 84\n        x = self.fc2(x)  # -> 10 (logits)\n        \n        return x\n\n# Usage\nmodel = LeNet5()\nprint(f\"Parameters: {sum(p.numel() for p in model.parameters()):,}\")",
+      "training": "import torch\nimport torch.nn as nn\nimport torch.optim as optim\nfrom torchvision import datasets, transforms\nfrom torch.utils.data import DataLoader\n\n# Data preparation\ntransform = transforms.Compose([\n    transforms.Resize((32, 32)),  # LeNet-5 expects 32x32 input\n    transforms.ToTensor(),\n    transforms.Normalize((0.1307,), (0.3081,))  # MNIST mean and std\n])\n\ntrain_dataset = datasets.MNIST('data', train=True, download=True, transform=transform)\ntest_dataset = datasets.MNIST('data', train=False, transform=transform)\n\ntrain_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)\ntest_loader = DataLoader(test_dataset, batch_size=1000, shuffle=False)\n\n# Initialize model\ndevice = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\nmodel = LeNet5().to(device)\n\n# Loss and optimizer\ncriterion = nn.CrossEntropyLoss()\noptimizer = optim.Adam(model.parameters(), lr=0.001)\n\n# Training loop\ndef train(epoch):\n    model.train()\n    for batch_idx, (data, target) in enumerate(train_loader):\n        data, target = data.to(device), target.to(device)\n        \n        optimizer.zero_grad()\n        output = model(data)\n        loss = criterion(output, target)\n        loss.backward()\n        optimizer.step()\n        \n        if batch_idx % 100 == 0:\n            print(f'Epoch {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)}] '\n                  f'Loss: {loss.item():.6f}')\n\n# Evaluation\ndef test():\n    model.eval()\n    test_loss = 0\n    correct = 0\n    \n    with torch.no_grad():\n        for data, target in test_loader:\n            data, target = data.to(device), target.to(device)\n            output = model(data)\n            test_loss += criterion(output, target).item()\n            pred = output.argmax(dim=1, keepdim=True)\n            correct += pred.eq(target.view_as(pred)).sum().item()\n    \n    test_loss /= len(test_loader)\n    accuracy = 100. * correct / len(test_loader.dataset)\n    print(f'\\nTest set: Average loss: {test_loss:.4f}, '\n          f'Accuracy: {correct}/{len(test_loader.dataset)} ({accuracy:.2f}%)\\n')\n    return accuracy\n\n# Train for 10 epochs\nfor epoch in range(1, 11):\n    train(epoch)\n    test()\n\nprint(\"Training complete! LeNet-5 achieves ~99% accuracy on MNIST.\")",
+      "inference": "import torch\nimport numpy as np\nfrom PIL import Image\nimport matplotlib.pyplot as plt\n\ndef predict_digit(model, image_path):\n    \"\"\"Predict digit from image file\"\"\"\n    # Load and preprocess image\n    img = Image.open(image_path).convert('L')  # Convert to grayscale\n    img = img.resize((32, 32))  # Resize to 32x32\n    \n    # Convert to tensor and normalize\n    transform = transforms.Compose([\n        transforms.ToTensor(),\n        transforms.Normalize((0.1307,), (0.3081,))\n    ])\n    img_tensor = transform(img).unsqueeze(0)  # Add batch dimension\n    \n    # Inference\n    model.eval()\n    with torch.no_grad():\n        output = model(img_tensor)\n        probabilities = torch.softmax(output, dim=1)\n        predicted_digit = output.argmax(dim=1).item()\n        confidence = probabilities[0][predicted_digit].item()\n    \n    # Visualize\n    plt.figure(figsize=(12, 4))\n    \n    # Show image\n    plt.subplot(1, 2, 1)\n    plt.imshow(img, cmap='gray')\n    plt.title(f'Input Image (32x32)')\n    plt.axis('off')\n    \n    # Show probabilities\n    plt.subplot(1, 2, 2)\n    plt.bar(range(10), probabilities[0].numpy())\n    plt.xlabel('Digit')\n    plt.ylabel('Probability')\n    plt.title(f'Predicted: {predicted_digit} (Confidence: {confidence:.2%})')\n    plt.xticks(range(10))\n    plt.tight_layout()\n    plt.show()\n    \n    return predicted_digit, confidence\n\n# Example usage\n# predicted, conf = predict_digit(model, 'my_digit.png')\n# print(f\"Predicted digit: {predicted} with {conf:.1%} confidence\")"
+    },
+    "tensorflow": {
+      "minimal": "import tensorflow as tf\nfrom tensorflow import keras\nfrom tensorflow.keras import layers\n\ndef create_lenet5():\n    \"\"\"Create LeNet-5 model in TensorFlow/Keras\"\"\"\n    model = keras.Sequential([\n        # C1: Convolutional Layer\n        layers.Conv2D(6, kernel_size=5, activation='tanh', \n                     input_shape=(32, 32, 1), name='C1'),\n        \n        # S2: Average Pooling\n        layers.AveragePooling2D(pool_size=2, strides=2, name='S2'),\n        \n        # C3: Convolutional Layer\n        layers.Conv2D(16, kernel_size=5, activation='tanh', name='C3'),\n        \n        # S4: Average Pooling\n        layers.AveragePooling2D(pool_size=2, strides=2, name='S4'),\n        \n        # C5: Convolutional Layer (acts as FC due to 5x5 input)\n        layers.Conv2D(120, kernel_size=5, activation='tanh', name='C5'),\n        \n        # Flatten\n        layers.Flatten(),\n        \n        # F6: Fully Connected\n        layers.Dense(84, activation='tanh', name='F6'),\n        \n        # Output Layer\n        layers.Dense(10, activation='softmax', name='Output')\n    ], name='LeNet5')\n    \n    return model\n\n# Create and display model\nmodel = create_lenet5()\nmodel.summary()\n\nprint(f\"\\nTotal parameters: {model.count_params():,}\")",
+      "training": "import tensorflow as tf\nfrom tensorflow import keras\nimport numpy as np\n\n# Load MNIST dataset\n(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()\n\n# Preprocess data\n# Resize to 32x32 (LeNet-5 input size)\nx_train = tf.image.resize(x_train[..., np.newaxis], [32, 32]).numpy()\nx_test = tf.image.resize(x_test[..., np.newaxis], [32, 32]).numpy()\n\n# Normalize to [0, 1]\nx_train = x_train / 255.0\nx_test = x_test / 255.0\n\nprint(f\"Training data shape: {x_train.shape}\")\nprint(f\"Test data shape: {x_test.shape}\")\n\n# Create model\nmodel = create_lenet5()\n\n# Compile model\nmodel.compile(\n    optimizer=keras.optimizers.Adam(learning_rate=0.001),\n    loss='sparse_categorical_crossentropy',\n    metrics=['accuracy']\n)\n\n# Callbacks\ncallbacks = [\n    keras.callbacks.EarlyStopping(\n        monitor='val_loss',\n        patience=3,\n        restore_best_weights=True\n    ),\n    keras.callbacks.ReduceLROnPlateau(\n        monitor='val_loss',\n        factor=0.5,\n        patience=2,\n        min_lr=1e-6\n    ),\n    keras.callbacks.ModelCheckpoint(\n        'lenet5_best.h5',\n        monitor='val_accuracy',\n        save_best_only=True\n    )\n]\n\n# Train model\nhistory = model.fit(\n    x_train, y_train,\n    batch_size=64,\n    epochs=20,\n    validation_split=0.1,\n    callbacks=callbacks,\n    verbose=1\n)\n\n# Evaluate on test set\ntest_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)\nprint(f\"\\nTest accuracy: {test_accuracy:.4f}\")\nprint(f\"Test loss: {test_loss:.4f}\")\n\n# Plot training history\nimport matplotlib.pyplot as plt\n\nplt.figure(figsize=(12, 4))\n\nplt.subplot(1, 2, 1)\nplt.plot(history.history['loss'], label='Train Loss')\nplt.plot(history.history['val_loss'], label='Val Loss')\nplt.xlabel('Epoch')\nplt.ylabel('Loss')\nplt.legend()\nplt.title('Training and Validation Loss')\n\nplt.subplot(1, 2, 2)\nplt.plot(history.history['accuracy'], label='Train Accuracy')\nplt.plot(history.history['val_accuracy'], label='Val Accuracy')\nplt.xlabel('Epoch')\nplt.ylabel('Accuracy')\nplt.legend()\nplt.title('Training and Validation Accuracy')\n\nplt.tight_layout()\nplt.show()",
+      "inference": "import tensorflow as tf\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom tensorflow import keras\n\n# Load trained model\nmodel = keras.models.load_model('lenet5_best.h5')\n\ndef predict_and_visualize(model, x_test, y_test, num_samples=10):\n    \"\"\"Visualize predictions on test samples\"\"\"\n    # Get random samples\n    indices = np.random.choice(len(x_test), num_samples, replace=False)\n    \n    # Make predictions\n    predictions = model.predict(x_test[indices])\n    predicted_labels = np.argmax(predictions, axis=1)\n    true_labels = y_test[indices]\n    \n    # Visualize\n    fig, axes = plt.subplots(2, 5, figsize=(15, 6))\n    axes = axes.ravel()\n    \n    for i in range(num_samples):\n        axes[i].imshow(x_test[indices[i]].squeeze(), cmap='gray')\n        \n        # Color code: green for correct, red for incorrect\n        color = 'green' if predicted_labels[i] == true_labels[i] else 'red'\n        \n        axes[i].set_title(\n            f'True: {true_labels[i]}\\nPred: {predicted_labels[i]}\\n'\n            f'Conf: {predictions[i][predicted_labels[i]]:.2%}',\n            color=color\n        )\n        axes[i].axis('off')\n    \n    plt.tight_layout()\n    plt.show()\n    \n    # Print accuracy\n    accuracy = np.mean(predicted_labels == true_labels)\n    print(f\"Accuracy on these {num_samples} samples: {accuracy:.1%}\")\n\n# Visualize predictions\npredict_and_visualize(model, x_test, y_test)\n\n# Confusion matrix\nfrom sklearn.metrics import confusion_matrix, classification_report\nimport seaborn as sns\n\n# Predict all test samples\nall_predictions = model.predict(x_test)\npredicted_classes = np.argmax(all_predictions, axis=1)\n\n# Compute confusion matrix\ncm = confusion_matrix(y_test, predicted_classes)\n\n# Plot\nplt.figure(figsize=(10, 8))\nsns.heatmap(cm, annot=True, fmt='d', cmap='Blues')\nplt.xlabel('Predicted Label')\nplt.ylabel('True Label')\nplt.title('Confusion Matrix - LeNet-5 on MNIST')\nplt.show()\n\n# Classification report\nprint(\"\\nClassification Report:\")\nprint(classification_report(y_test, predicted_classes))"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Optical Character Recognition (OCR)",
+      "application": "Handwritten digit recognition (ZIP codes, bank checks)",
+      "description": "LeNet-5 was originally developed by AT&T for reading handwritten ZIP codes on mail envelopes and digits on bank checks. It achieved 99%+ accuracy on MNIST and was deployed in production systems in the late 1990s, processing millions of documents.",
+      "realWorldExample": "US Postal Service deployed LeNet-5-based systems to automatically read ZIP codes on envelopes, significantly speeding up mail sorting. Banks used it to automatically process check amounts."
+    },
+    {
+      "domain": "Document Classification",
+      "application": "Character and symbol recognition in scanned documents",
+      "description": "Beyond digits, LeNet-5's architecture can recognize handwritten characters, mathematical symbols, and simple shapes. The hierarchical feature learning naturally adapts to different character sets (Latin, Arabic, Asian scripts).",
+      "realWorldExample": "Early PDF text extraction systems used LeNet-5-style CNNs to recognize characters in scanned documents, enabling searchable PDFs."
+    },
+    {
+      "domain": "Educational Tool",
+      "application": "Teaching fundamental CNN concepts",
+      "description": "LeNet-5 is the perfect architecture for learning CNNs: small enough to understand every layer, fast enough to train on CPUs, yet powerful enough to achieve excellent results. It demonstrates all key CNN concepts without overwhelming complexity.",
+      "realWorldExample": "Used in thousands of computer vision courses and tutorials as the introductory CNN architecture. Students can train it in minutes on MNIST and see 99% accuracy."
+    },
+    {
+      "domain": "Embedded Systems",
+      "application": "Lightweight digit recognition on resource-constrained devices",
+      "description": "With only 61K parameters and 341K FLOPs, LeNet-5 can run on microcontrollers and embedded devices. Modern quantized versions achieve real-time performance on Arduino and Raspberry Pi.",
+      "realWorldExample": "Smart meters and IoT devices use LeNet-5-inspired tiny CNNs for on-device digit reading and simple image classification without cloud connectivity."
+    },
+    {
+      "domain": "Medical Imaging",
+      "application": "Basic cell or tissue classification in microscopy",
+      "description": "For simple binary or multi-class classification tasks on small medical images (e.g., malignant vs benign cells), LeNet-5's shallow architecture can be sufficient and trains with limited data.",
+      "realWorldExample": "Pathology labs use LeNet-5-style networks as baselines for automated cell counting and basic tissue classification before moving to deeper models."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MNIST",
+        "accuracy": 99.05,
+        "otherMetrics": {
+          "error_rate": "0.95%",
+          "training_time": "~20 minutes on CPU",
+          "inference_speed": "~1000 images/sec on CPU"
+        }
+      },
+      {
+        "name": "MNIST (with data augmentation)",
+        "accuracy": 99.3,
+        "otherMetrics": {
+          "error_rate": "0.70%",
+          "training_time": "~45 minutes on CPU",
+          "techniques": "rotation, shift, zoom"
+        }
+      },
+      {
+        "name": "Fashion-MNIST",
+        "accuracy": 89.7,
+        "otherMetrics": {
+          "error_rate": "10.3%",
+          "note": "More challenging than MNIST digits",
+          "training_epochs": "20-30"
+        }
+      },
+      {
+        "name": "EMNIST (Extended MNIST)",
+        "accuracy": 88.5,
+        "otherMetrics": {
+          "classes": "47 (letters + digits)",
+          "error_rate": "11.5%",
+          "note": "Original LeNet-5 with minimal changes"
+        }
+      }
+    ],
+    "comparison": [
+      {
+        "model": "LeNet-5 (1998)",
+        "parameters": "61K",
+        "mnistAccuracy": 99.05,
+        "trainingTime": "20 min (CPU)"
+      },
+      {
+        "model": "AlexNet (2012)",
+        "parameters": "60M",
+        "mnistAccuracy": 99.77,
+        "trainingTime": "5 min (GPU)"
+      },
+      {
+        "model": "Modern CNN (2020)",
+        "parameters": "100K",
+        "mnistAccuracy": 99.8,
+        "trainingTime": "2 min (GPU)"
+      }
+    ]
+  },
+  "trainingTips": {
+    "initialization": [
+      {
+        "technique": "Xavier/Glorot Initialization",
+        "description": "Initialize weights with variance scaled by fan-in and fan-out. Critical for tanh activations used in original LeNet-5.",
+        "code": "torch.nn.init.xavier_uniform_(layer.weight)"
+      },
+      {
+        "technique": "Modern: Use PyTorch/TensorFlow defaults",
+        "description": "Modern frameworks use Kaiming/He initialization by default, which works well even with tanh. Don't overthink initialization for LeNet-5.",
+        "code": "# Just create layers normally, default init is fine\nnn.Conv2d(1, 6, 5)  # Already well-initialized"
+      }
+    ],
+    "hyperparameters": [
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.001 (Adam) or 0.01 (SGD)",
+        "rationale": "LeNet-5 is shallow and stable. Higher learning rates converge faster without overshooting. Use learning rate scheduling for best results."
+      },
+      {
+        "parameter": "Batch Size",
+        "recommendedValue": "64-128",
+        "rationale": "MNIST is small (60K images), so moderate batch sizes work well. Larger batches (256+) can hurt generalization on this dataset."
+      },
+      {
+        "parameter": "Optimizer",
+        "recommendedValue": "Adam (modern) or SGD with momentum (original)",
+        "rationale": "Adam converges faster and requires less hyperparameter tuning. Original paper used SGD with learning rate scheduling."
+      },
+      {
+        "parameter": "Epochs",
+        "recommendedValue": "10-20",
+        "rationale": "LeNet-5 converges quickly on MNIST. Training longer risks overfitting without regularization. Use early stopping."
+      }
+    ],
+    "regularization": [
+      {
+        "technique": "Dropout",
+        "description": "Add dropout (0.2-0.5) after FC layers to prevent overfitting. Not in original LeNet-5 but helps on small datasets.",
+        "code": "nn.Dropout(p=0.5)"
+      },
+      {
+        "technique": "Data Augmentation",
+        "description": "Random rotations (±15°), shifts (±10%), and zoom (90-110%) boost accuracy by 0.2-0.4% and improve robustness.",
+        "code": "transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1))"
+      },
+      {
+        "technique": "Weight Decay (L2 Regularization)",
+        "description": "Add small L2 penalty (1e-4 to 1e-5) to prevent overfitting. Especially useful if training on subset of MNIST.",
+        "code": "optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)"
+      }
+    ],
+    "commonMistakes": [
+      {
+        "mistake": "Wrong Input Size",
+        "description": "LeNet-5 expects 32×32 images, but MNIST is 28×28. Must resize or pad to 32×32.",
+        "fix": "Use transforms.Resize((32, 32)) or transforms.Pad(2) in your data pipeline."
+      },
+      {
+        "mistake": "Using ReLU Instead of Tanh",
+        "description": "Original LeNet-5 used tanh. While ReLU works and trains faster, it changes the architecture. For historical accuracy, use tanh; for performance, ReLU is fine.",
+        "fix": "Decide based on goal: teaching (use tanh) vs maximum accuracy (use ReLU)."
+      },
+      {
+        "mistake": "Forgetting to Normalize Inputs",
+        "description": "MNIST pixel values are [0, 255]. Must normalize to [0, 1] or standardize (subtract mean, divide by std).",
+        "fix": "transforms.Normalize((0.1307,), (0.3081,))  # MNIST mean and std"
+      },
+      {
+        "mistake": "Training Too Long",
+        "description": "LeNet-5 starts overfitting MNIST after 20-30 epochs without regularization. Validation accuracy plateaus or decreases.",
+        "fix": "Use early stopping: monitor validation loss and stop when it stops improving for 3-5 epochs."
+      },
+      {
+        "mistake": "Not Using GPU",
+        "description": "While LeNet-5 is fast enough on CPU, training on GPU is 10-50× faster. Modern practice always uses GPU.",
+        "fix": "device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')"
+      }
+    ],
+    "optimization": [
+      {
+        "technique": "Learning Rate Scheduling",
+        "description": "Reduce learning rate by 0.1× every 5-10 epochs or when validation loss plateaus. Helps fine-tune in later epochs.",
+        "code": "scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)"
+      },
+      {
+        "technique": "Gradient Clipping",
+        "description": "Not usually needed for LeNet-5 (it's shallow), but clip gradients if you see exploding gradients during training.",
+        "code": "torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)"
+      }
+    ]
+  },
+  "comparisons": ["perceptron", "mlp", "alexnet", "vgg16", "modern-cnn"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Gradient-Based Learning Applied to Document Recognition",
+      "url": "http://yann.lecun.com/exdb/publis/pdf/lecun-01a.pdf",
+      "description": "The original 1998 paper by Yann LeCun et al. Comprehensive 46-page paper covering not just LeNet-5 but the entire gradient-based learning framework for pattern recognition."
+    },
+    {
+      "type": "website",
+      "title": "MNIST Database of Handwritten Digits",
+      "url": "http://yann.lecun.com/exdb/mnist/",
+      "description": "Official MNIST dataset homepage by Yann LeCun. Includes dataset download, statistics, and historical context about its creation and benchmarks."
+    },
+    {
+      "type": "tutorial",
+      "title": "PyTorch LeNet-5 Tutorial",
+      "url": "https://pytorch.org/tutorials/beginner/blitz/neural_networks_tutorial.html",
+      "description": "Official PyTorch tutorial building a LeNet-5-style network. Great for beginners learning both CNNs and PyTorch."
+    },
+    {
+      "type": "video",
+      "title": "Stanford CS231n: Convolutional Neural Networks for Visual Recognition",
+      "url": "https://www.youtube.com/watch?v=bNb2fEVKeEo",
+      "description": "Lecture covering CNN foundations including LeNet-5. Explains convolution, pooling, and why CNNs work better than fully-connected networks for images."
+    },
+    {
+      "type": "book",
+      "title": "Deep Learning (Goodfellow, Bengio, Courville) - Chapter 9",
+      "url": "https://www.deeplearningbook.org/contents/convnets.html",
+      "description": "Free online textbook chapter on CNNs. Covers LeNet-5 in historical context and explains convolutional operations mathematically."
+    },
+    {
+      "type": "interactive",
+      "title": "CNN Explainer",
+      "url": "https://poloclub.github.io/cnn-explainer/",
+      "description": "Interactive visualization of CNN operations including convolution and pooling. Uses a LeNet-5-style architecture. Perfect for visual learners."
+    },
+    {
+      "type": "code",
+      "title": "Keras LeNet-5 Implementation",
+      "url": "https://github.com/keras-team/keras/blob/master/examples/mnist_cnn.py",
+      "description": "Official Keras example implementing a LeNet-5-style CNN for MNIST. Clean, well-commented code suitable for learning."
+    },
+    {
+      "type": "article",
+      "title": "A Beginner's Guide to Understanding Convolutional Neural Networks",
+      "url": "https://adeshpande3.github.io/A-Beginner%27s-Guide-To-Understanding-Convolutional-Neural-Networks/",
+      "description": "Comprehensive blog post explaining CNN concepts from scratch using LeNet-5 as the primary example. Great for building intuition."
+    }
+  ],
+  "tags": [
+    "cnn",
+    "computer-vision",
+    "image-classification",
+    "mnist",
+    "ocr",
+    "classic-architecture",
+    "yann-lecun",
+    "1998",
+    "beginner-friendly",
+    "educational",
+    "convolutional-layers",
+    "pooling",
+    "handwritten-digits",
+    "gradient-based-learning",
+    "document-recognition"
+  ],
+  "difficulty": "Beginner",
+  "computationalRequirements": {
+    "minimumVRAM": "Not applicable (runs on CPU)",
+    "recommendedVRAM": "1 GB (if using GPU)",
+    "minimumRAM": "2 GB",
+    "trainingTime": {
+      "cpu": "20-30 minutes (MNIST, 20 epochs)",
+      "gpu": "2-5 minutes (MNIST, 20 epochs)",
+      "tpu": "1-2 minutes (MNIST, 20 epochs)"
+    },
+    "inferenceSpeed": {
+      "cpu": "~1000 images/second",
+      "gpu": "~10,000 images/second",
+      "mobile": "~100 images/second (quantized)"
+    },
+    "storageRequirements": "240 KB (model), 11 MB (MNIST dataset)"
+  }
+}

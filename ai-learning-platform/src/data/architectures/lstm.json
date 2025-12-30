@@ -1,0 +1,172 @@
+{
+  "id": "lstm",
+  "name": "LSTM (Long Short-Term Memory)",
+  "category": "rnn",
+  "subcategory": "Gated RNNs",
+  "year": 1997,
+  "authors": ["Sepp Hochreiter", "Jürgen Schmidhuber"],
+  "paper": "Long Short-Term Memory",
+  "paperUrl": "https://www.biomedsearch.com/nih/Long-Short-Term-Memory/9377276.html",
+  "description": "LSTM networks solved the vanishing gradient problem of vanilla RNNs by introducing a gating mechanism that controls information flow. The key innovation is the cell state—a separate memory pathway that flows through the network with minimal modifications, allowing gradients to flow backward through hundreds of time steps without vanishing. Three gates (forget, input, output) regulate what information enters the cell state, what gets forgotten, and what gets output. This architecture became the dominant approach for sequence modeling from 1997 until Transformers emerged in 2017.",
+  "plainEnglish": "Think of LSTM as an improved RNN with a better memory system. Instead of just one hidden state that changes completely at every step (and forgets everything quickly), LSTM has two memory tracks: 1) A cell state that acts like a conveyor belt carrying information across time with minimal changes, and 2) A hidden state like vanilla RNN. Three 'gates' control the flow: the forget gate decides what to erase from memory, the input gate decides what new information to store, and the output gate decides what to actually use. These gates learn to preserve important information for hundreds or thousands of time steps—solving the vanishing gradient problem that plagued vanilla RNNs. LSTMs can remember that a sentence started with 'The cat' even after reading 50 words, enabling them to predict 'was' instead of 'were' at the end.",
+  "keyInnovation": "The cell state with additive updates (instead of multiplicative) enables gradient flow across hundreds of time steps. Gates use sigmoid activations to produce values in [0,1], acting as soft switches: 0 = block completely, 1 = let through completely. The forget gate was added later (1999) and proved crucial. LSTMs dominated sequence modeling for 20 years across NLP, speech recognition, time series, and more—only recently challenged by Transformers which offer better parallelization.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "lstm",
+        "name": "LSTM Layer",
+        "description": "LSTM cell with forget, input, and output gates plus cell state",
+        "parameters": {
+          "hidden_size": 128,
+          "return_sequences": true
+        },
+        "parameterCount": 66048
+      },
+      {
+        "type": "dense",
+        "name": "Output",
+        "parameters": {
+          "units": 10,
+          "activation": "softmax"
+        },
+        "parameterCount": 1290
+      }
+    ],
+    "depth": 2,
+    "parameters": 67338,
+    "flops": "Variable",
+    "memoryFootprint": "~270 KB"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Forget Gate",
+        "latex": "f_t = \\sigma(W_f \\cdot [h_{t-1}, x_t] + b_f)",
+        "explanation": "Decides what information to throw away from cell state. Outputs 0-1 for each number in cell state. 0 = 'completely forget', 1 = 'completely keep'.",
+        "variables": {
+          "f_t": "Forget gate activation (0 to 1)",
+          "σ": "Sigmoid function",
+          "h_{t-1}": "Previous hidden state",
+          "x_t": "Current input"
+        }
+      },
+      {
+        "name": "Input Gate",
+        "latex": "i_t = \\sigma(W_i \\cdot [h_{t-1}, x_t] + b_i)",
+        "explanation": "Decides what new information to store in cell state. Works with candidate values to update memory.",
+        "variables": {
+          "i_t": "Input gate activation",
+          "σ": "Sigmoid function"
+        }
+      },
+      {
+        "name": "Candidate Cell State",
+        "latex": "\\tilde{C}_t = \\tanh(W_C \\cdot [h_{t-1}, x_t] + b_C)",
+        "explanation": "New candidate values that could be added to cell state. Tanh creates values in [-1, 1].",
+        "variables": {
+          "C̃_t": "Candidate cell state values"
+        }
+      },
+      {
+        "name": "Cell State Update",
+        "latex": "C_t = f_t \\odot C_{t-1} + i_t \\odot \\tilde{C}_t",
+        "explanation": "THE KEY EQUATION. Update cell state by: (1) Forget some old memories (f_t ⊙ C_{t-1}), (2) Add new memories (i_t ⊙ C̃_t). The addition (not multiplication!) allows gradients to flow backward unchanged.",
+        "variables": {
+          "C_t": "New cell state",
+          "⊙": "Element-wise multiplication",
+          "C_{t-1}": "Previous cell state"
+        }
+      },
+      {
+        "name": "Output Gate",
+        "latex": "o_t = \\sigma(W_o \\cdot [h_{t-1}, x_t] + b_o)",
+        "explanation": "Decides what parts of cell state to output as hidden state.",
+        "variables": {
+          "o_t": "Output gate activation"
+        }
+      },
+      {
+        "name": "Hidden State Update",
+        "latex": "h_t = o_t \\odot \\tanh(C_t)",
+        "explanation": "Hidden state is filtered version of cell state. Used as input to next time step and for predictions.",
+        "variables": {
+          "h_t": "Hidden state (what gets output)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Constant Error Carousel",
+        "statement": "The cell state with additive updates allows error gradients to flow backward through time without vanishing or exploding.",
+        "significance": "This is why LSTMs can learn dependencies spanning 100-1000 time steps while vanilla RNNs fail beyond ~10-20 steps."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass LSTMModel(nn.Module):\n    def __init__(self, input_size, hidden_size, output_size, num_layers=1):\n        super().__init__()\n        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)\n        self.fc = nn.Linear(hidden_size, output_size)\n    \n    def forward(self, x):\n        out, (hn, cn) = self.lstm(x)\n        out = self.fc(out[:, -1, :])  # Use last time step\n        return out\n\nmodel = LSTMModel(10, 128, 5)\nprint(f\"Parameters: {sum(p.numel() for p in model.parameters()):,}\")"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Machine Translation",
+      "application": "Seq2seq translation (e.g., English → French)",
+      "description": "LSTMs powered Google Translate from 2016-2019. Encoder LSTM reads source sentence, decoder LSTM generates translation. Attention mechanism added in 2014 dramatically improved quality.",
+      "realWorldExample": "Google Neural Machine Translation (GNMT) used 8-layer stacked LSTMs with attention, achieving near-human translation quality for many language pairs."
+    },
+    {
+      "domain": "Speech Recognition",
+      "application": "Audio to text transcription",
+      "description": "Bidirectional LSTMs process audio features in both directions, achieving superhuman accuracy on clean speech.",
+      "realWorldExample": "DeepSpeech by Baidu, Google's Voice Search—all used LSTM-based architectures before switching to Transformers in 2019-2020."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Penn Treebank (Language Modeling)",
+        "otherMetrics": {
+          "perplexity": "~78-90",
+          "note": "Much better than vanilla RNN (~120-150)"
+        }
+      },
+      {
+        "name": "IMDB Sentiment",
+        "accuracy": 88.5,
+        "otherMetrics": {
+          "note": "Can handle full reviews (500+ words)"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Gradient Clipping",
+        "recommendedValue": "5.0-10.0",
+        "rationale": "Still needed but less critical than vanilla RNN"
+      }
+    ]
+  },
+  "comparisons": ["vanilla-rnn", "gru", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Long Short-Term Memory",
+      "url": "https://www.biomedsearch.com/nih/Long-Short-Term-Memory/9377276.html",
+      "description": "Original 1997 paper by Hochreiter & Schmidhuber"
+    }
+  ],
+  "tags": ["rnn", "lstm", "gated", "sequence", "nlp", "1997"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB",
+    "recommendedVRAM": "8 GB",
+    "trainingTime": {
+      "gpu": "2-3× slower than vanilla RNN (4 weight matrices instead of 2)"
+    },
+    "storageRequirements": "4× vanilla RNN parameters"
+  }
+}

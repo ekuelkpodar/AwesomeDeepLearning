@@ -1,0 +1,100 @@
+{
+  "id": "simclr",
+  "name": "SimCLR (Simple Contrastive Learning)",
+  "category": "self-supervised",
+  "description": "Self-supervised framework using contrastive learning with data augmentation. Learns visual representations without labels by maximizing agreement between augmented views of the same image.",
+  "icon": "contrast",
+  "yearIntroduced": 2020,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "NT-Xent Loss (Normalized Temperature-scaled Cross Entropy)",
+        "latex": "\\mathcal{L}_{i,j} = -\\log \\frac{\\exp(\\text{sim}(z_i, z_j)/\\tau)}{\\sum_{k=1}^{2N} \\mathbb{1}_{[k \\neq i]} \\exp(\\text{sim}(z_i, z_k)/\\tau)}",
+        "explanation": "THE CORE. Contrastive loss for pair (i,j) from same image. z_i, z_j = projections of augmented views. sim = cosine similarity. τ = temperature (0.1-0.5). Denominator = all negatives (2N-1 samples). Goal: pull positives together, push negatives apart!",
+        "variables": {
+          "z_i, z_j": "Projected embeddings (positive pair)",
+          "sim(·,·)": "Cosine similarity (normalized dot product)",
+          "τ": "Temperature parameter (controls hardness)",
+          "N": "Batch size (total 2N augmented samples)"
+        }
+      },
+      {
+        "name": "Cosine Similarity",
+        "latex": "\\text{sim}(z_i, z_j) = \\frac{z_i^T z_j}{\\|z_i\\| \\|z_j\\|}",
+        "explanation": "Normalized dot product. Range [-1, 1]. 1 = identical direction, -1 = opposite, 0 = orthogonal. Normalization prevents magnitude dominance. Key: focuses on angle, not magnitude.",
+        "variables": {
+          "z_i^T z_j": "Dot product of embeddings",
+          "||z||": "L2 norm (Euclidean length)"
+        }
+      },
+      {
+        "name": "Data Augmentation Pipeline",
+        "latex": "t \\sim \\mathcal{T}, \\quad \\tilde{x}_i = t(x_i), \\quad \\tilde{x}_j = t'(x_i)",
+        "explanation": "Random composition of augmentations. t, t' ~ T (crop, resize, color jitter, grayscale, Gaussian blur). Same image x → two views. Strong augmentation crucial! Crop + color jitter = 90% of gains.",
+        "variables": {
+          "T": "Set of augmentation transforms",
+          "t, t'": "Sampled augmentation functions",
+          "x_i": "Original image",
+          "x̃_i, x̃_j": "Augmented views (positive pair)"
+        }
+      },
+      {
+        "name": "Projection Head",
+        "latex": "z = g(h) = W^{(2)} \\sigma(W^{(1)} h), \\quad h = f(\\tilde{x})",
+        "explanation": "MLP after encoder. h = representation from ResNet-50. g = 2-layer MLP (2048 → 2048 → 128). Nonlinearity σ = ReLU. Key insight: projection improves quality (discard g after training, use h). Why? g removes info not useful for contrastive task.",
+        "variables": {
+          "h": "Representation from encoder f (e.g., ResNet)",
+          "g": "Projection head (MLP)",
+          "z": "Projected embedding for contrastive loss",
+          "W^(1), W^(2)": "Weight matrices of MLP"
+        }
+      },
+      {
+        "name": "Temperature Effect",
+        "latex": "\\frac{\\partial \\mathcal{L}}{\\partial \\tau} \\propto \\text{concentration of gradients on hard negatives}",
+        "explanation": "Lower τ → sharper distribution → focus on hard negatives. Higher τ → softer distribution → easier optimization. Sweet spot: τ=0.1-0.5. Too low = unstable, too high = slow learning.",
+        "variables": {
+          "τ": "Temperature hyperparameter",
+          "Hard negatives": "Negative samples similar to anchor"
+        }
+      },
+      {
+        "name": "Batch Size Effect",
+        "latex": "\\text{Negative samples} = 2N - 2 \\approx 2N \\text{ for large } N",
+        "explanation": "CRITICAL: Large batch size = more negatives = better performance. SimCLR uses N=4096-8192! Each sample sees ~8K negatives. Small batches hurt badly (N=256 → 55% acc, N=8192 → 76% acc on ImageNet).",
+        "variables": {
+          "N": "Batch size per device",
+          "2N": "Total augmented samples in batch",
+          "Negatives": "All samples except positive pair"
+        }
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "# SimCLR implementation\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nfrom torchvision.models import resnet50\n\nclass SimCLR(nn.Module):\n    def __init__(self, base_encoder=resnet50, projection_dim=128):\n        super().__init__()\n        # Encoder (e.g., ResNet-50)\n        self.encoder = base_encoder(pretrained=False)\n        self.feature_dim = self.encoder.fc.in_features\n        self.encoder.fc = nn.Identity()  # Remove classification head\n        \n        # Projection head g(h) = W^(2) σ(W^(1) h)\n        self.projector = nn.Sequential(\n            nn.Linear(self.feature_dim, self.feature_dim),\n            nn.ReLU(),\n            nn.Linear(self.feature_dim, projection_dim)\n        )\n    \n    def forward(self, x):\n        h = self.encoder(x)  # Representation\n        z = self.projector(h)  # Projection\n        return h, z\n\nclass NTXentLoss(nn.Module):\n    \"\"\"Normalized Temperature-scaled Cross Entropy Loss.\"\"\"\n    def __init__(self, temperature=0.5):\n        super().__init__()\n        self.temperature = temperature\n    \n    def forward(self, z_i, z_j):\n        \"\"\"\n        Args:\n            z_i, z_j: Projected embeddings (batch_size, projection_dim)\n        Returns:\n            Contrastive loss (scalar)\n        \"\"\"\n        batch_size = z_i.shape[0]\n        \n        # Normalize embeddings\n        z_i = F.normalize(z_i, dim=1)\n        z_j = F.normalize(z_j, dim=1)\n        \n        # Concatenate all samples: [z_i; z_j]\n        z = torch.cat([z_i, z_j], dim=0)  # (2N, dim)\n        \n        # Compute similarity matrix\n        sim_matrix = torch.matmul(z, z.T) / self.temperature  # (2N, 2N)\n        \n        # Create mask for positive pairs\n        # Positives: (i, i+N) and (i+N, i)\n        mask = torch.eye(2 * batch_size, dtype=torch.bool, device=z.device)\n        sim_matrix.masked_fill_(mask, -9e15)  # Mask self-similarity\n        \n        # Positive pairs\n        pos_sim = torch.cat([\n            torch.diag(sim_matrix, batch_size),  # z_i vs z_j\n            torch.diag(sim_matrix, -batch_size)  # z_j vs z_i\n        ], dim=0)\n        \n        # Compute loss: -log(exp(pos) / sum(exp(all)))\n        loss = -pos_sim + torch.logsumexp(sim_matrix, dim=1)\n        return loss.mean()\n\n# Training example\nmodel = SimCLR(base_encoder=resnet50, projection_dim=128)\ncriterion = NTXentLoss(temperature=0.5)\n\n# Assume x_i, x_j are augmented views of same batch\n# x_i, x_j: (batch_size, 3, 224, 224)\n_, z_i = model(x_i)\n_, z_j = model(x_j)\nloss = criterion(z_i, z_j)\n\n# After pretraining, use encoder for downstream tasks\n# model.encoder → extract features for linear eval or fine-tuning",
+    "keyComponents": ["ResNet-50 encoder", "Projection head (2-layer MLP)", "NT-Xent loss", "Strong data augmentation", "Large batch size"]
+  },
+  "useCases": [
+    {"title": "ImageNet Linear Eval", "description": "76.5% top-1 accuracy with linear classifier on frozen features (ResNet-50)"},
+    {"title": "Transfer Learning", "description": "Outperforms supervised pretraining on 12/12 transfer tasks (detection, segmentation)"},
+    {"title": "Semi-Supervised Learning", "description": "With 1% labels: 57.9% top-5 acc (vs 16.3% supervised)"},
+    {"title": "Representation Learning", "description": "Learn visual features without human annotations"}
+  ],
+  "benchmarks": {"ImageNet Top-1": "76.5% (linear eval)", "Transfer Learning": "Beats supervised pretraining", "Batch Size": "4096-8192", "Training Time": "~1000 TPU-hours (ResNet-50)"},
+  "trainingTips": [
+    {"tip": "Use large batch sizes (4096+) with distributed training", "reason": "More negatives = better performance. Batch size is critical!"},
+    {"tip": "Strong augmentation: random crop + color jitter + blur", "reason": "Crop + color = 90% of gains. Blur helps with larger models."},
+    {"tip": "Tune temperature τ (0.1-0.5, default 0.5)", "reason": "Lower τ focuses on hard negatives. Too low = unstable."},
+    {"tip": "Train longer (800+ epochs) for best results", "reason": "Self-supervised needs more epochs than supervised (100)."},
+    {"tip": "Use projection head, discard after pretraining", "reason": "g improves contrastive learning, but h is better representation."}
+  ],
+  "comparisons": ["resnet50", "byol", "moco"],
+  "resources": [
+    {"type": "paper", "title": "A Simple Framework for Contrastive Learning of Visual Representations", "url": "https://arxiv.org/abs/2002.05709", "description": "Original SimCLR (Chen et al., 2020)"},
+    {"type": "paper", "title": "Big Self-Supervised Models are Strong Semi-Supervised Learners", "url": "https://arxiv.org/abs/2006.10029", "description": "SimCLR v2 with improved results"}
+  ],
+  "tags": ["simclr", "contrastive", "self-supervised", "augmentation", "2020"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {"minimumVRAM": "16 GB (batch 256)", "recommendedVRAM": "32 GB+ (batch 4096)", "trainingTime": {"imagenet": "~1000 TPU-hours for ResNet-50"}, "typicalBatchSize": 4096}
+}

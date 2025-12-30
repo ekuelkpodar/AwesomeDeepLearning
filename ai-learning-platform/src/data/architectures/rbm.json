@@ -1,0 +1,186 @@
+{
+  "id": "rbm",
+  "name": "Restricted Boltzmann Machine",
+  "category": "energy-based",
+  "description": "Undirected graphical model with visible and hidden units forming a bipartite graph. Foundation for Deep Belief Networks and early generative modeling.",
+  "icon": "network",
+  "yearIntroduced": 1986,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Energy Function (Hopfield-style)",
+        "latex": "E(v, h) = -\\sum_i a_i v_i - \\sum_j b_j h_j - \\sum_{i,j} v_i W_{ij} h_j",
+        "explanation": "THE CORE. Energy of joint configuration (v,h). v = visible units (data), h = hidden units (latent features). W = weights, a/b = biases. Lower energy = more probable state.",
+        "variables": {
+          "v": "Visible units (input data, binary or real)",
+          "h": "Hidden units (latent features, binary)",
+          "W": "Weight matrix (visible-hidden connections)",
+          "a, b": "Biases for visible and hidden units"
+        }
+      },
+      {
+        "name": "Joint Probability (Gibbs Distribution)",
+        "latex": "p(v, h) = \\frac{e^{-E(v,h)}}{Z}, \\quad Z = \\sum_{v,h} e^{-E(v,h)}",
+        "explanation": "Probability via Boltzmann distribution. Z is partition function (sum over all 2^(n+m) states). Intractable for large models.",
+        "variables": {
+          "Z": "Partition function (normalizing constant)",
+          "p(v,h)": "Joint probability of visible-hidden state"
+        }
+      },
+      {
+        "name": "Conditional Distributions (Factorization)",
+        "latex": "p(h_j=1|v) = \\sigma\\left(b_j + \\sum_i W_{ij} v_i\\right), \\quad p(v_i=1|h) = \\sigma\\left(a_i + \\sum_j W_{ij} h_j\\right)",
+        "explanation": "KEY PROPERTY. No visible-visible or hidden-hidden connections → conditionals factorize! Can sample all h_j in parallel given v, and vice versa. σ = sigmoid.",
+        "variables": {
+          "σ": "Sigmoid function",
+          "p(h|v)": "Hidden given visible (encoder)",
+          "p(v|h)": "Visible given hidden (decoder)"
+        }
+      },
+      {
+        "name": "Contrastive Divergence-k (CD-k)",
+        "latex": "\\Delta W \\propto \\langle v h^T \\rangle_{data} - \\langle v h^T \\rangle_{model}",
+        "explanation": "Gradient approximation. ⟨·⟩_data: sample h~p(h|v_data). ⟨·⟩_model: run k Gibbs steps starting from data. CD-1 (k=1) works surprisingly well!",
+        "variables": {
+          "⟨vh^T⟩_data": "Positive phase (data statistics)",
+          "⟨vh^T⟩_model": "Negative phase (model statistics, k Gibbs steps)",
+          "k": "Number of Gibbs sampling steps (typically 1)"
+        }
+      },
+      {
+        "name": "Gibbs Sampling (Block Sampling)",
+        "latex": "h^{(t+1)} \\sim p(h|v^{(t)}), \\quad v^{(t+1)} \\sim p(v|h^{(t+1)})",
+        "explanation": "Alternate sampling h given v, then v given h. Converges to equilibrium p(v,h). In CD-k, start from data and run k steps (not to equilibrium).",
+        "variables": {
+          "h^(t)": "Hidden state at step t",
+          "v^(t)": "Visible state at step t",
+          "~": "Sample from distribution"
+        }
+      },
+      {
+        "name": "Free Energy (Marginal over h)",
+        "latex": "F(v) = -\\log \\sum_h e^{-E(v,h)} = -a^T v - \\sum_j \\log(1 + e^{b_j + W_j^T v})",
+        "explanation": "Free energy after marginalizing hidden units. Used for computing p(v) ∝ e^(-F(v)). Gradient ∇F used in persistent CD.",
+        "variables": {
+          "F(v)": "Free energy of visible units",
+          "W_j": "j-th column of W (weights to hidden unit j)"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "Binary RBM",
+        "description": "v, h ∈ {0,1}. Classic RBM for binary data (MNIST binarized). Uses sigmoid activations."
+      },
+      {
+        "name": "Gaussian-Bernoulli RBM",
+        "description": "v ∈ ℝ (continuous), h ∈ {0,1}. For real-valued data. p(v|h) = N(a + Wh, σ²I)."
+      },
+      {
+        "name": "Deep Belief Network (DBN)",
+        "description": "Stack RBMs: train layer 1, freeze, train layer 2 on h₁, etc. Pre-training for deep nets (2006)."
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "class RBM(nn.Module):\n    def __init__(self, n_visible=784, n_hidden=128):\n        super().__init__()\n        self.W = nn.Parameter(torch.randn(n_visible, n_hidden) * 0.01)\n        self.a = nn.Parameter(torch.zeros(n_visible))  # visible bias\n        self.b = nn.Parameter(torch.zeros(n_hidden))   # hidden bias\n    \n    def sample_h_given_v(self, v):\n        \"\"\"Sample hidden units given visible: p(h|v).\"\"\"\n        activation = torch.matmul(v, self.W) + self.b  # (batch, n_hidden)\n        prob_h = torch.sigmoid(activation)\n        h_sample = torch.bernoulli(prob_h)  # Binary sampling\n        return prob_h, h_sample\n    \n    def sample_v_given_h(self, h):\n        \"\"\"Sample visible units given hidden: p(v|h).\"\"\"\n        activation = torch.matmul(h, self.W.t()) + self.a  # (batch, n_visible)\n        prob_v = torch.sigmoid(activation)\n        v_sample = torch.bernoulli(prob_v)\n        return prob_v, v_sample\n    \n    def gibbs_sampling(self, v, k=1):\n        \"\"\"Run k steps of Gibbs sampling starting from v.\"\"\"\n        v_sample = v\n        for _ in range(k):\n            _, h_sample = self.sample_h_given_v(v_sample)\n            _, v_sample = self.sample_v_given_h(h_sample)\n        return v_sample\n    \n    def free_energy(self, v):\n        \"\"\"Compute free energy F(v) = -log sum_h exp(-E(v,h)).\"\"\"\n        vbias_term = torch.matmul(v, self.a)\n        hidden_term = torch.sum(\n            torch.log(1 + torch.exp(torch.matmul(v, self.W) + self.b)),\n            dim=1\n        )\n        return -vbias_term - hidden_term\n    \n    def contrastive_divergence(self, v_pos, k=1):\n        \"\"\"CD-k training: approximate gradient.\"\"\"\n        # Positive phase\n        prob_h_pos, h_pos = self.sample_h_given_v(v_pos)\n        positive_grad = torch.matmul(v_pos.t(), prob_h_pos)\n        \n        # Negative phase: k Gibbs steps\n        v_neg = self.gibbs_sampling(v_pos, k=k)\n        prob_h_neg, _ = self.sample_h_given_v(v_neg)\n        negative_grad = torch.matmul(v_neg.t(), prob_h_neg)\n        \n        # Gradients\n        grad_W = (positive_grad - negative_grad) / v_pos.size(0)\n        grad_a = (v_pos - v_neg).mean(dim=0)\n        grad_b = (prob_h_pos - prob_h_neg).mean(dim=0)\n        \n        return grad_W, grad_a, grad_b, v_neg\n\n# Training loop\nrbm = RBM(n_visible=784, n_hidden=128)\noptimizer = torch.optim.SGD(rbm.parameters(), lr=0.01, momentum=0.9)\n\nfor epoch in range(50):\n    for v_batch in data_loader:  # MNIST images, binarized\n        v_batch = v_batch.view(v_batch.size(0), -1)\n        v_batch = (v_batch > 0.5).float()  # Binarize\n        \n        # CD-1 update\n        grad_W, grad_a, grad_b, v_neg = rbm.contrastive_divergence(v_batch, k=1)\n        \n        # Manual gradient update (could use optimizer with custom loss)\n        with torch.no_grad():\n            rbm.W += 0.01 * grad_W\n            rbm.a += 0.01 * grad_a\n            rbm.b += 0.01 * grad_b\n    \n    # Monitor reconstruction error\n    recon_error = torch.mean((v_batch - v_neg)**2)\n    print(f'Epoch {epoch}, Reconstruction Error: {recon_error.item():.4f}')\n\n# Generation: Gibbs sampling from random init\nv_gen = torch.bernoulli(torch.rand(16, 784))\nv_gen = rbm.gibbs_sampling(v_gen, k=1000)  # Long chain for equilibrium\n# v_gen contains generated MNIST-like images",
+    "keyComponents": [
+      "Bipartite visible-hidden graph",
+      "Factorized conditionals p(h|v), p(v|h)",
+      "CD-k training (typically k=1)",
+      "Gibbs sampling for generation"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Feature Learning (Pre-training)",
+      "description": "Train RBM on raw data, use hidden activations as features for classifier. Pioneered deep learning pre-training (2006). Obsolete since 2012 (replaced by supervised pre-training).",
+      "example": "DBN on MNIST: 0.95% error (Hinton 2006, state-of-art at the time)"
+    },
+    {
+      "title": "Collaborative Filtering",
+      "description": "Netflix Prize (2006-2009): RBMs for movie recommendations. Visible = user ratings, hidden = latent preferences. Handles missing data naturally.",
+      "example": "Netflix: RBM improved RMSE by 6% over baseline"
+    },
+    {
+      "title": "Dimensionality Reduction",
+      "description": "Project high-dim data to hidden units h. Similar to PCA but nonlinear. Visualize data in 2D/3D hidden space.",
+      "example": "MNIST 784D → 64D hidden representation for visualization"
+    },
+    {
+      "title": "Generative Modeling (Historical)",
+      "description": "Generate MNIST digits via Gibbs sampling. Quality poor compared to modern GANs/diffusion. Primarily historical interest.",
+      "example": "RBM generates blurry MNIST digits (2006-2012 era)"
+    }
+  ],
+  "benchmarks": {
+    "MNIST Classification (with DBN)": "0.95% error (2006, pre-training era)",
+    "Netflix Prize (RMSE)": "0.8911 (RBM ensemble, 2009)",
+    "Reconstruction Error (MNIST)": "~0.02 MSE after 50 epochs",
+    "Training Time": "10-30 min on GPU (MNIST, 128 hidden units)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Use CD-1 instead of CD-10. k=1 works well in practice and is 10x faster.",
+      "reason": "CD-1 is biased but low variance. Higher k doesn't improve results much."
+    },
+    {
+      "tip": "Add L2 weight decay (0.0001) to prevent overfitting",
+      "reason": "RBMs prone to memorizing training data without regularization."
+    },
+    {
+      "tip": "Use momentum (0.9) and learning rate decay (start 0.1, decay to 0.01)",
+      "reason": "CD gradients are noisy. Momentum smooths updates."
+    },
+    {
+      "tip": "For real-valued data, use Gaussian-Bernoulli RBM with σ=1 (don't learn variance)",
+      "reason": "Learning σ is unstable. Fixed σ=1 after normalizing data works better."
+    }
+  ],
+  "comparisons": ["vae", "autoencoder", "ebm", "hopfield"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "A Fast Learning Algorithm for Deep Belief Nets",
+      "url": "https://www.cs.toronto.edu/~hinton/absps/fastnc.pdf",
+      "description": "Hinton's seminal DBN paper (2006)"
+    },
+    {
+      "type": "paper",
+      "title": "Training Products of Experts by Minimizing Contrastive Divergence",
+      "url": "https://www.cs.toronto.edu/~hinton/absps/tr00-004.pdf",
+      "description": "Hinton's CD algorithm (2002)"
+    },
+    {
+      "type": "tutorial",
+      "title": "A Practical Guide to Training Restricted Boltzmann Machines",
+      "url": "https://www.cs.toronto.edu/~hinton/absps/guideTR.pdf",
+      "description": "Hinton's RBM training guide (2010)"
+    },
+    {
+      "type": "code",
+      "title": "PyTorch RBM Implementation",
+      "url": "https://github.com/GabrielBianconi/pytorch-rbm",
+      "description": "Clean RBM implementation with CD-k"
+    },
+    {
+      "type": "blog",
+      "title": "Deep Learning (Goodfellow) Chapter 20",
+      "url": "https://www.deeplearningbook.org/contents/generative_models.html",
+      "description": "Comprehensive RBM theory"
+    }
+  ],
+  "tags": ["rbm", "boltzmann-machine", "energy-based", "probabilistic", "unsupervised", "1986"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB",
+    "recommendedVRAM": "4 GB",
+    "trainingTime": {
+      "mnist": "10-30 min on single GPU",
+      "cifar10": "2-4 hours (rarely used for images)"
+    },
+    "typicalBatchSize": 128,
+    "notes": "Fast training but limited capacity. Modern alternatives (VAE, diffusion) preferred."
+  }
+}

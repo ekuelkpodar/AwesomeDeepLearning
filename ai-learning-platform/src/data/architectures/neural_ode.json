@@ -1,0 +1,103 @@
+{
+  "id": "neural_ode",
+  "name": "Neural Ordinary Differential Equation",
+  "category": "hybrid",
+  "description": "Continuous-depth neural network where hidden states evolve via an ODE. Replaces discrete layers with continuous dynamics solved by ODE solvers. Memory-efficient backprop via adjoint method.",
+  "icon": "trending-up",
+  "yearIntroduced": 2018,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "ODE Dynamics",
+        "latex": "\\frac{d\\mathbf{h}(t)}{dt} = f_\\theta(\\mathbf{h}(t), t), \\quad \\mathbf{h}(t_1) = \\text{ODESolve}(f_\\theta, \\mathbf{h}(t_0), t_0, t_1)",
+        "explanation": "THE CORE. Hidden state h(t) evolves continuously via ODE. f_θ = neural network (dynamics function). ODESolve = numerical integration (Dopri5, RK4). h(t_0) = input, h(t_1) = output. Depth = integration time (t_1 - t_0), not layer count!",
+        "variables": {
+          "h(t)": "Hidden state at time t (continuous)",
+          "f_θ": "Neural network parameterizing dynamics",
+          "t_0, t_1": "Start and end times (integration interval)",
+          "ODESolve": "ODE solver (adaptive step size)"
+        }
+      },
+      {
+        "name": "Adjoint Method (Memory-Efficient Backprop)",
+        "latex": "\\mathbf{a}(t) = \\frac{\\partial L}{\\partial \\mathbf{h}(t)}, \\quad \\frac{d\\mathbf{a}(t)}{dt} = -\\mathbf{a}(t)^T \\frac{\\partial f_\\theta}{\\partial \\mathbf{h}}, \\quad \\frac{dL}{d\\theta} = -\\int_{t_1}^{t_0} \\mathbf{a}(t)^T \\frac{\\partial f_\\theta}{\\partial \\theta} dt",
+        "explanation": "Backprop without storing intermediate states! a(t) = adjoint state (gradient w.r.t. h(t)). Solve ODE backward in time (t_1 → t_0) to compute gradients. Memory O(1), not O(depth). Key insight: sensitivity to h(t) evolves via adjoint ODE.",
+        "variables": {
+          "a(t)": "Adjoint state (∂L/∂h(t))",
+          "∂f_θ/∂h": "Jacobian of dynamics w.r.t. state",
+          "∂f_θ/∂θ": "Jacobian of dynamics w.r.t. parameters",
+          "L": "Loss function"
+        }
+      },
+      {
+        "name": "Continuous Normalizing Flow",
+        "latex": "\\log p(\\mathbf{x}(t_1)) = \\log p(\\mathbf{x}(t_0)) - \\int_{t_0}^{t_1} \\text{Tr}\\left(\\frac{\\partial f_\\theta}{\\partial \\mathbf{x}}\\right) dt",
+        "explanation": "Change of variables for continuous flows. Instantaneous change of variables theorem: density evolves via trace of Jacobian. FFJORD = free-form Jacobian. Unlike discrete flows, no invertibility constraint on f_θ!",
+        "variables": {
+          "p(x(t))": "Probability density at time t",
+          "Tr(∂f_θ/∂x)": "Trace of Jacobian (divergence)",
+          "x(t_0)": "Base distribution (e.g., Gaussian)",
+          "x(t_1)": "Data distribution"
+        }
+      },
+      {
+        "name": "Number of Function Evaluations (NFE)",
+        "latex": "\\text{NFE} = \\text{# of } f_\\theta \\text{ calls during ODESolve}",
+        "explanation": "Adaptive step size → variable compute! NFE = cost metric. Dopri5 adjusts steps based on error tolerance. Training NFE ≈ 100-200, inference NFE ≈ 20-50. Trade-off: accuracy vs speed.",
+        "variables": {
+          "NFE": "Number of function evaluations (cost)",
+          "Error tolerance": "Controls step size (lower → more steps)",
+          "Adaptive solver": "Dopri5, RK45, etc."
+        }
+      },
+      {
+        "name": "Augmented Neural ODE",
+        "latex": "\\frac{d}{dt} \\begin{bmatrix} \\mathbf{h}(t) \\\\ \\mathbf{a}(t) \\end{bmatrix} = f_\\theta\\left(\\begin{bmatrix} \\mathbf{h}(t) \\\\ \\mathbf{a}(t) \\end{bmatrix}, t\\right)",
+        "explanation": "Add extra dimensions a(t) (augmented states) to increase expressivity. Vanilla Neural ODE struggles with complex flows (topology limitations). ANODE augments with zeros: [h(t_0); 0] → better expressivity for non-homeomorphic transformations.",
+        "variables": {
+          "h(t)": "Original hidden state",
+          "a(t)": "Augmented dimensions (learnable)",
+          "Concatenation": "Increases state dimension"
+        }
+      },
+      {
+        "name": "Regularization (NFE Control)",
+        "latex": "L_{\\text{total}} = L_{\\text{task}} + \\lambda_1 \\|\\mathbf{h}(t_1) - \\mathbf{h}(t_0)\\|^2 + \\lambda_2 \\int_{t_0}^{t_1} \\|f_\\theta(\\mathbf{h}(t), t)\\|^2 dt",
+        "explanation": "Regularize to reduce NFE! First term: penalize large changes (smooth dynamics). Second term: penalize large f_θ outputs (kinetic energy). Lower ||f_θ|| → larger step sizes → fewer NFE. Trade-off: regularization strength vs accuracy.",
+        "variables": {
+          "λ_1": "Penalty for large state changes",
+          "λ_2": "Penalty for large dynamics (kinetic energy)",
+          "||h(t_1) - h(t_0)||": "Total displacement",
+          "||f_θ||": "Magnitude of dynamics"
+        }
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "# Neural ODE implementation with torchdiffeij\nimport torch\nimport torch.nn as nn\nfrom torchdiffeq import odeint, odeint_adjoint\n\nclass ODEFunc(nn.Module):\n    \"\"\"Dynamics function f_θ(h(t), t).\"\"\"\n    def __init__(self, dim=64):\n        super().__init__()\n        self.net = nn.Sequential(\n            nn.Linear(dim, 128),\n            nn.Tanh(),\n            nn.Linear(128, 128),\n            nn.Tanh(),\n            nn.Linear(128, dim)\n        )\n        self.nfe = 0  # Track function evaluations\n    \n    def forward(self, t, h):\n        self.nfe += 1\n        return self.net(h)\n\nclass NeuralODE(nn.Module):\n    def __init__(self, dim=64, tol=1e-3):\n        super().__init__()\n        self.func = ODEFunc(dim)\n        self.tol = tol\n    \n    def forward(self, h0, t=torch.tensor([0., 1.])):\n        \"\"\"Forward pass: solve ODE from t[0] to t[1].\n        Args:\n            h0: Initial state (batch, dim)\n            t: Integration times (start, end)\n        Returns:\n            h1: Final state (batch, dim)\n        \"\"\"\n        self.func.nfe = 0  # Reset counter\n        # Use adjoint method for memory-efficient backprop\n        out = odeint_adjoint(self.func, h0, t, \n                             rtol=self.tol, atol=self.tol, \n                             method='dopri5')\n        return out[-1]  # Return final state h(t_1)\n    \n    def get_nfe(self):\n        return self.func.nfe\n\n# Example usage\nmodel = NeuralODE(dim=64, tol=1e-3)\nh0 = torch.randn(32, 64)  # Batch of 32\nh1 = model(h0)\nprint(f'NFE: {model.get_nfe()}')  # Typically 50-150\n\n# Continuous Normalizing Flow variant\nclass CNF(nn.Module):\n    def __init__(self, dim=2):\n        super().__init__()\n        self.func = ODEFunc(dim)\n    \n    def forward(self, x, reverse=False):\n        \"\"\"x: (batch, dim). Returns: transformed x and log p(x).\"\"\"\n        # Augment with log p(x) (trace of Jacobian)\n        logp_diff_t = torch.zeros(x.shape[0], 1).to(x)\n        state = torch.cat([x, logp_diff_t], dim=1)\n        \n        t = torch.tensor([1., 0.] if reverse else [0., 1.]).to(x)\n        state_t = odeint_adjoint(self._dynamics, state, t, \n                                 rtol=1e-5, atol=1e-5)\n        \n        x_t, logp_diff_t = state_t[-1][:, :-1], state_t[-1][:, -1:]\n        return x_t, logp_diff_t\n    \n    def _dynamics(self, t, state):\n        x, _ = state[:, :-1], state[:, -1:]\n        with torch.enable_grad():\n            x = x.requires_grad_(True)\n            dx = self.func(t, x)\n            # Compute trace of Jacobian (Hutchinson's estimator for efficiency)\n            divergence = self._divergence_approx(dx, x)\n        return torch.cat([dx, -divergence], dim=1)\n    \n    def _divergence_approx(self, dx, x, n_samples=1):\n        \"\"\"Hutchinson's trace estimator.\"\"\"\n        # Simplified: exact trace for small dims\n        div = 0.\n        for i in range(x.shape[1]):\n            div += torch.autograd.grad(dx[:, i].sum(), x, \n                                       create_graph=True)[0][:, i:i+1]\n        return div",
+    "keyComponents": ["ODE solver (Dopri5)", "Adjoint method", "Dynamics network f_θ", "Adaptive step size", "NFE tracking"]
+  },
+  "useCases": [
+    {"title": "Time Series (Irregular Sampling)", "description": "Latent ODE for irregularly-sampled medical data (ICU patients)"},
+    {"title": "Generative Modeling", "description": "FFJORD for density estimation, normalizing flows"},
+    {"title": "Physics-Informed Learning", "description": "Encode physical laws in f_θ (energy conservation, Hamilton's equations)"},
+    {"title": "Video Prediction", "description": "Continuous-time dynamics for smooth interpolation"}
+  ],
+  "benchmarks": {"MNIST": "~98% (fewer parameters)", "Density Estimation": "Competitive with Glow/RealNVP", "NFE": "50-150 (training), 20-50 (inference)"},
+  "trainingTips": [
+    {"tip": "Use adjoint method (odeint_adjoint) to save memory", "reason": "Avoids storing all intermediate states. O(1) memory vs O(NFE)."},
+    {"tip": "Regularize dynamics to reduce NFE", "reason": "Penalize ||f_θ|| to encourage smooth, efficient trajectories."},
+    {"tip": "Start with higher tolerance (1e-3), then decrease", "reason": "Lower tolerance → more NFE. Tune for speed vs accuracy."},
+    {"tip": "Augment dimensions for complex tasks", "reason": "Vanilla Neural ODE has topological limits. ANODE adds expressivity."}
+  ],
+  "comparisons": ["resnet", "transformer"],
+  "resources": [
+    {"type": "paper", "title": "Neural Ordinary Differential Equations", "url": "https://arxiv.org/abs/1806.07366", "description": "Original Neural ODE paper (NeurIPS 2018 Best Paper)"},
+    {"type": "paper", "title": "FFJORD: Free-form Continuous Dynamics for Scalable Reversible Generative Models", "url": "https://arxiv.org/abs/1810.01367", "description": "Continuous normalizing flows"},
+    {"type": "paper", "title": "Augmented Neural ODEs", "url": "https://arxiv.org/abs/1904.01681", "description": "Fixing expressivity limitations"}
+  ],
+  "tags": ["neural-ode", "continuous", "ode-solver", "adjoint", "2018"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {"minimumVRAM": "4 GB", "recommendedVRAM": "8 GB", "trainingTime": {"mnist": "2-4 hours on GPU (variable NFE)"}, "typicalBatchSize": 128}
+}

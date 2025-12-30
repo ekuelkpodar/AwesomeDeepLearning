@@ -1,0 +1,143 @@
+{
+  "id": "gru",
+  "name": "GRU (Gated Recurrent Unit)",
+  "category": "rnn",
+  "subcategory": "Gated RNNs",
+  "year": 2014,
+  "authors": ["Kyunghyun Cho", "Bart van Merriënboer", "Yoshua Bengio"],
+  "paper": "Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation",
+  "paperUrl": "https://arxiv.org/abs/1406.1078",
+  "description": "GRU simplified LSTM's architecture while maintaining similar performance. Instead of separate cell and hidden states with three gates, GRU uses just a hidden state with two gates (reset and update). This reduces parameters by ~25% and speeds up training while still solving the vanishing gradient problem. GRUs often match LSTM performance on many tasks and have become the preferred choice when computational efficiency matters.",
+  "plainEnglish": "GRU is LSTM's simpler, faster cousin. It asks: 'Do we really need that complex cell state and three gates?' The answer: often no! GRU combines LSTM's cell and hidden states into one, and uses only 2 gates instead of 3: (1) Update gate decides how much of old memory to keep vs new input to use—it's like LSTM's forget + input gates combined, (2) Reset gate decides how much past information to forget when computing new memory. Fewer parameters mean faster training and less overfitting on small datasets. Performance is similar to LSTM on most tasks, sometimes better, sometimes worse—there's no clear winner, so try both!",
+  "keyInnovation": "GRU proved you don't need LSTM's complexity to solve long-term dependencies. With 25% fewer parameters, GRUs train faster and work better on smaller datasets. The reset gate's design (using tanh for candidates) differs from LSTM and can capture dependencies differently. Many practitioners now default to GRU unless they have specific reasons to use LSTM. The architecture's simplicity makes it easier to implement, understand, and modify for custom applications.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "gru",
+        "name": "GRU Layer",
+        "description": "GRU cell with update and reset gates",
+        "parameters": {
+          "hidden_size": 128,
+          "return_sequences": true
+        },
+        "parameterCount": 49536
+      },
+      {
+        "type": "dense",
+        "name": "Output",
+        "parameters": {
+          "units": 10,
+          "activation": "softmax"
+        },
+        "parameterCount": 1290
+      }
+    ],
+    "depth": 2,
+    "parameters": 50826,
+    "flops": "Variable",
+    "memoryFootprint": "~200 KB"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Update Gate",
+        "latex": "z_t = \\sigma(W_z \\cdot [h_{t-1}, x_t])",
+        "explanation": "Combines LSTM's forget + input gates. Decides how much old hidden state to keep (1-z_t) vs new candidate to use (z_t). 0 = keep all old, 1 = use all new.",
+        "variables": {
+          "z_t": "Update gate (0 to 1)",
+          "σ": "Sigmoid",
+          "h_{t-1}": "Previous hidden state",
+          "x_t": "Current input"
+        }
+      },
+      {
+        "name": "Reset Gate",
+        "latex": "r_t = \\sigma(W_r \\cdot [h_{t-1}, x_t])",
+        "explanation": "Decides how much past information to ignore when computing new candidate. 0 = ignore all past, 1 = use all past.",
+        "variables": {
+          "r_t": "Reset gate (0 to 1)"
+        }
+      },
+      {
+        "name": "Candidate Hidden State",
+        "latex": "\\tilde{h}_t = \\tanh(W \\cdot [r_t \\odot h_{t-1}, x_t])",
+        "explanation": "New candidate for hidden state. Reset gate r_t filters previous hidden state—if r_t≈0, this is like starting fresh.",
+        "variables": {
+          "h̃_t": "Candidate hidden state",
+          "⊙": "Element-wise multiplication"
+        }
+      },
+      {
+        "name": "Hidden State Update",
+        "latex": "h_t = (1 - z_t) \\odot h_{t-1} + z_t \\odot \\tilde{h}_t",
+        "explanation": "THE KEY. Linear interpolation between old hidden state and new candidate. Update gate z_t controls the balance. This additive update (like LSTM's cell state) enables gradient flow.",
+        "variables": {
+          "h_t": "New hidden state",
+          "1-z_t": "How much old memory to keep",
+          "z_t": "How much new memory to use"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Fewer Parameters, Similar Performance",
+        "statement": "GRU achieves similar performance to LSTM with ~25-30% fewer parameters (3 weight matrices vs 4).",
+        "significance": "Makes GRU faster to train and less prone to overfitting on small datasets."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass GRUModel(nn.Module):\n    def __init__(self, input_size, hidden_size, output_size, num_layers=1):\n        super().__init__()\n        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)\n        self.fc = nn.Linear(hidden_size, output_size)\n    \n    def forward(self, x):\n        out, hn = self.gru(x)\n        out = self.fc(out[:, -1, :])\n        return out\n\nmodel = GRUModel(10, 128, 5)\nprint(f\"Parameters: {sum(p.numel() for p in model.parameters()):,}\")"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Speech Synthesis",
+      "application": "Text-to-speech (TTS) systems",
+      "description": "GRUs are popular in TTS for their efficiency. WaveNet-style models use GRU layers to model long-range dependencies in audio.",
+      "realWorldExample": "Tacotron 2 (used in Google Assistant) uses GRU in the encoder for processing text before generating speech."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Penn Treebank",
+        "otherMetrics": {
+          "perplexity": "~80-92",
+          "note": "Slightly worse than LSTM but trains faster"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "When to use GRU vs LSTM",
+        "recommendedValue": "GRU for smaller datasets/faster training; LSTM when you have lots of data",
+        "rationale": "No definitive answer—empirically test both!"
+      }
+    ]
+  },
+  "comparisons": ["vanilla-rnn", "lstm", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Learning Phrase Representations using RNN Encoder-Decoder",
+      "url": "https://arxiv.org/abs/1406.1078",
+      "description": "Original 2014 paper introducing GRU"
+    }
+  ],
+  "tags": ["rnn", "gru", "gated", "sequence", "efficient", "2014"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB",
+    "recommendedVRAM": "6 GB",
+    "trainingTime": {
+      "gpu": "~25% faster than LSTM"
+    },
+    "storageRequirements": "3× vanilla RNN (vs 4× for LSTM)"
+  }
+}

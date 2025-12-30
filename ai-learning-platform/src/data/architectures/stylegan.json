@@ -1,0 +1,278 @@
+{
+  "id": "stylegan",
+  "name": "StyleGAN",
+  "category": "generative",
+  "subcategory": "Adversarial",
+  "year": 2018,
+  "authors": ["Tero Karras", "Samuli Laine", "Timo Aila"],
+  "paper": "A Style-Based Generator Architecture for GANs",
+  "paperUrl": "https://arxiv.org/abs/1812.04948",
+  "description": "StyleGAN revolutionized image synthesis by borrowing concepts from neural style transfer. Unlike traditional GANs that inject noise at the input, StyleGAN uses a mapping network to transform latent code into an intermediate latent space W, then applies learned 'styles' at each resolution via Adaptive Instance Normalization (AdaIN). This architecture enables unprecedented control: you can independently modify high-level attributes (pose, identity) and low-level details (skin texture, hair) by injecting different styles at different layers. StyleGAN introduces stochastic variation for fine details like hair placement, ensuring diversity without affecting global structure. The result: photorealistic 1024×1024 faces with fine control over attributes. StyleGAN2/3 further improved quality and removed artifacts.",
+  "plainEnglish": "Think of traditional GAN: random noise → Generator → image. Problem: hard to control what's generated. StyleGAN solution: Split generation into two stages. Stage 1: Mapping network transforms random noise z into 'style' vector w. This intermediate space W is more disentangled—changing w changes specific attributes (e.g., age). Stage 2: Synthesis network starts from constant learned input (not noise!), then applies style at each resolution. At 4×4: apply style → controls pose, general face shape. At 8×8, 16×16: apply different styles → controls facial features. At 512×512, 1024×1024: apply styles → controls fine details like skin texture. Key: AdaIN (Adaptive Instance Normalization) applies style by scaling/shifting feature maps. Stochastic noise adds randomness (hair strands, pores) without changing structure. Result: you can mix styles—use person A's pose (from 4×4 style) with person B's features (from 64×64 style). This is 'style mixing'—impossible with traditional GANs!",
+  "keyInnovation": "Mapping network: 8-layer MLP transforms z ~ N(0,1) into w ∈ W. W space is less entangled than Z—linear interpolation in W gives smooth attribute transitions. Synthesis network: constant 4×4 learned tensor as input (not noise). Progressive upsampling to 1024×1024 via 9 resolution blocks. AdaIN at each layer: style vector modulates mean/std of features. Style mixing: use different w vectors at different layers for fine control. Stochastic variation: per-pixel noise added after convolutions for fine details (hair, skin texture). Truncation trick: w' = w̄ + ψ(w - w̄), ψ < 1 trades diversity for quality. Perceptual path length metric: measures smoothness of latent space. StyleGAN2: removes artifacts (blob-like patterns), improves FID. StyleGAN3: alias-free design for perfect rotation/translation equivariance.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [3, 1024, 1024],
+    "layers": [
+      {
+        "type": "mapping",
+        "name": "Mapping Network",
+        "description": "8-layer MLP that maps z ∈ Z to w ∈ W. Learns disentangled intermediate representation.",
+        "parameters": {
+          "input_dim": 512,
+          "hidden_dim": 512,
+          "num_layers": 8,
+          "activation": "leaky_relu",
+          "normalization": "pixel_norm"
+        },
+        "parameterCount": 2097152
+      },
+      {
+        "type": "synthesis",
+        "name": "Synthesis Network",
+        "description": "Progressive generation from 4×4 to 1024×1024. Each resolution has: Conv → AdaIN (apply style) → noise → Conv → AdaIN → noise → upsample.",
+        "parameters": {
+          "base_resolution": 4,
+          "target_resolution": 1024,
+          "num_channels": [512, 512, 512, 512, 256, 128, 64, 32, 16],
+          "style_dim": 512,
+          "noise_injection": true
+        },
+        "parameterCount": 26220096
+      },
+      {
+        "type": "discriminator",
+        "name": "Progressive Discriminator",
+        "description": "Mirrors generator architecture. Progressive downsampling from 1024×1024 to 4×4.",
+        "parameters": {
+          "architecture": "progressive",
+          "minibatch_stddev": true,
+          "activation": "leaky_relu"
+        },
+        "parameterCount": 23530625
+      }
+    ],
+    "depth": 18,
+    "parameters": 51847873,
+    "flops": "~52B per image",
+    "memoryFootprint": "~200 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Mapping Network",
+        "latex": "\\mathbf{w} = f(\\mathbf{z}), \\quad f: \\mathcal{Z} \\to \\mathcal{W}",
+        "explanation": "8-layer MLP with LeakyReLU. Transforms normally distributed z into intermediate latent w. W space is more disentangled: factors of variation (age, pose, glasses) are more linear. This is THE KEY—allows style mixing and better control.",
+        "variables": {
+          "z": "Input latent code ~ N(0,1), 512-dim",
+          "w": "Intermediate style code, 512-dim",
+          "f": "Mapping network (8 FC layers)"
+        }
+      },
+      {
+        "name": "Adaptive Instance Normalization (AdaIN)",
+        "latex": "\\text{AdaIN}(\\mathbf{x}_i, \\mathbf{y}) = \\mathbf{y}_{s,i} \\frac{\\mathbf{x}_i - \\mu(\\mathbf{x}_i)}{\\sigma(\\mathbf{x}_i)} + \\mathbf{y}_{b,i}",
+        "explanation": "THE CORE OPERATION. Normalizes feature map x_i (per channel), then scales by y_s and shifts by y_b. Style y comes from affine transform of w. Each AdaIN layer controls different attributes: early layers (4×4-8×8) control pose/structure, middle (16×16-64×64) control features, late (128×128-1024×1024) control color/texture.",
+        "variables": {
+          "x_i": "Feature map for channel i",
+          "μ(x_i)": "Mean of features (per channel, spatial)",
+          "σ(x_i)": "Std of features (per channel, spatial)",
+          "y_s,i": "Learned scale from style w",
+          "y_b,i": "Learned bias from style w"
+        }
+      },
+      {
+        "name": "Style Mixing",
+        "latex": "\\text{Use } \\mathbf{w}_1 \\text{ for layers } l < l_{crossover}, \\mathbf{w}_2 \\text{ for layers } l \\geq l_{crossover}",
+        "explanation": "During training, randomly use two latent codes w_1, w_2 with crossover point. Forces network to localize styles: early layers can't rely on later styles. Result: coarse styles (pose, shape) controlled by early w, fine styles (color, texture) by late w. Enables mixing at inference: take pose from person A, features from person B!",
+        "variables": {
+          "w_1, w_2": "Two different style codes",
+          "l_crossover": "Resolution where we switch styles"
+        }
+      },
+      {
+        "name": "Stochastic Variation",
+        "latex": "\\mathbf{x}_{i+1} = \\text{Conv}(\\mathbf{x}_i) + \\mathbf{B} \\cdot \\mathbf{noise}",
+        "explanation": "After each convolution, add per-pixel Gaussian noise scaled by learned per-channel weights B. Adds stochastic details (exact hair placement, skin pores) without affecting global structure. If you remove noise → smooth image, same identity. Adding noise → fine details appear.",
+        "variables": {
+          "noise": "Per-pixel Gaussian noise ~ N(0,1)",
+          "B": "Learned per-channel scaling factors"
+        }
+      },
+      {
+        "name": "Truncation Trick",
+        "latex": "\\mathbf{w}' = \\bar{\\mathbf{w}} + \\psi (\\mathbf{w} - \\bar{\\mathbf{w}})",
+        "explanation": "For inference: move w toward average w̄ (computed from many samples). ψ=1: no truncation (full diversity, some outliers). ψ=0.7: reduced diversity, higher quality (fewer artifacts). ψ=0: always generate average face. Trade-off: quality vs diversity. StyleGAN paper uses ψ=0.7 for demos.",
+        "variables": {
+          "w̄": "Average style vector (from ~10k samples)",
+          "ψ": "Truncation parameter (0 to 1)",
+          "w'": "Truncated style vector"
+        }
+      },
+      {
+        "name": "Perceptual Path Length (PPL)",
+        "latex": "l_W = \\mathbb{E}\\left[\\frac{1}{\\epsilon^2} d(G(\\text{lerp}(\\mathbf{w}_1, \\mathbf{w}_2; t)), G(\\text{lerp}(\\mathbf{w}_1, \\mathbf{w}_2; t+\\epsilon)))\\right]",
+        "explanation": "Metric for disentanglement. Measures how much generated image changes when interpolating in latent space. Lower PPL = smoother interpolations = more disentangled. Compare Z space vs W space: W has lower PPL (better). Use VGG perceptual distance d.",
+        "variables": {
+          "lerp": "Linear interpolation",
+          "d": "Perceptual distance (VGG features)",
+          "ε": "Small step size"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Intermediate Latent Space Disentanglement",
+        "statement": "Mapping network f: Z → W learns a disentangled representation where linear interpolation corresponds to perceptually meaningful transitions.",
+        "significance": "Explains why W space enables better control than Z. In Z, factors are entangled (changing one number changes multiple attributes). In W, factors are more linear."
+      },
+      {
+        "name": "Localization of Styles",
+        "statement": "Due to AdaIN at each resolution and style mixing regularization, each layer specializes: early (coarse structure), middle (features), late (fine details).",
+        "significance": "Enables unprecedented control. You can modify pose without changing texture, or vice versa. Foundation for semantic editing tools."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass MappingNetwork(nn.Module):\n    def __init__(self, z_dim=512, w_dim=512, num_layers=8):\n        super().__init__()\n        layers = []\n        for i in range(num_layers):\n            layers.append(nn.Linear(z_dim if i == 0 else w_dim, w_dim))\n            layers.append(nn.LeakyReLU(0.2))\n        self.mapping = nn.Sequential(*layers)\n    \n    def forward(self, z):\n        # Pixel normalization\n        z = z / torch.sqrt(torch.mean(z ** 2, dim=1, keepdim=True) + 1e-8)\n        w = self.mapping(z)\n        return w\n\nclass AdaIN(nn.Module):\n    def __init__(self, style_dim, num_features):\n        super().__init__()\n        self.norm = nn.InstanceNorm2d(num_features, affine=False)\n        # Style modulation\n        self.style_scale = nn.Linear(style_dim, num_features)\n        self.style_bias = nn.Linear(style_dim, num_features)\n    \n    def forward(self, x, w):\n        # Normalize\n        x = self.norm(x)\n        # Apply style\n        style_scale = self.style_scale(w).unsqueeze(2).unsqueeze(3)\n        style_bias = self.style_bias(w).unsqueeze(2).unsqueeze(3)\n        return style_scale * x + style_bias\n\nclass SynthesisBlock(nn.Module):\n    def __init__(self, in_channels, out_channels, w_dim, upsample=True):\n        super().__init__()\n        self.upsample = upsample\n        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)\n        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)\n        self.adain1 = AdaIN(w_dim, out_channels)\n        self.adain2 = AdaIN(w_dim, out_channels)\n        \n        # Noise injection\n        self.noise_weight1 = nn.Parameter(torch.zeros(1, out_channels, 1, 1))\n        self.noise_weight2 = nn.Parameter(torch.zeros(1, out_channels, 1, 1))\n    \n    def forward(self, x, w):\n        if self.upsample:\n            x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)\n        \n        # First conv + AdaIN + noise\n        x = self.conv1(x)\n        noise = torch.randn(x.shape[0], 1, x.shape[2], x.shape[3], device=x.device)\n        x = x + self.noise_weight1 * noise\n        x = F.leaky_relu(self.adain1(x, w), 0.2)\n        \n        # Second conv + AdaIN + noise\n        x = self.conv2(x)\n        noise = torch.randn(x.shape[0], 1, x.shape[2], x.shape[3], device=x.device)\n        x = x + self.noise_weight2 * noise\n        x = F.leaky_relu(self.adain2(x, w), 0.2)\n        \n        return x\n\nclass StyleGAN(nn.Module):\n    def __init__(self, z_dim=512, w_dim=512, img_channels=3, img_resolution=256):\n        super().__init__()\n        self.mapping = MappingNetwork(z_dim, w_dim)\n        \n        # Learned constant input\n        self.const_input = nn.Parameter(torch.randn(1, 512, 4, 4))\n        \n        # Synthesis blocks (4x4 → 8x8 → 16x16 → 32x32 → 64x64 → 128x128 → 256x256)\n        self.blocks = nn.ModuleList([\n            SynthesisBlock(512, 512, w_dim, upsample=False),  # 4x4\n            SynthesisBlock(512, 512, w_dim),  # 8x8\n            SynthesisBlock(512, 512, w_dim),  # 16x16\n            SynthesisBlock(512, 256, w_dim),  # 32x32\n            SynthesisBlock(256, 128, w_dim),  # 64x64\n            SynthesisBlock(128, 64, w_dim),   # 128x128\n            SynthesisBlock(64, 32, w_dim),    # 256x256\n        ])\n        \n        # To RGB layers\n        self.to_rgb = nn.Conv2d(32, img_channels, 1)\n    \n    def forward(self, z, truncation_psi=1.0, style_mixing_prob=0.0):\n        batch_size = z.shape[0]\n        \n        # Get style code\n        w = self.mapping(z)\n        \n        # Truncation trick (inference)\n        if truncation_psi < 1.0:\n            w_avg = self.w_avg  # Computed during training\n            w = w_avg + truncation_psi * (w - w_avg)\n        \n        # Style mixing (training)\n        if style_mixing_prob > 0 and self.training:\n            if torch.rand(1).item() < style_mixing_prob:\n                z2 = torch.randn_like(z)\n                w2 = self.mapping(z2)\n                mixing_cutoff = torch.randint(1, len(self.blocks), (1,)).item()\n            else:\n                w2 = None\n                mixing_cutoff = len(self.blocks)\n        else:\n            w2 = None\n            mixing_cutoff = len(self.blocks)\n        \n        # Synthesis\n        x = self.const_input.repeat(batch_size, 1, 1, 1)\n        \n        for i, block in enumerate(self.blocks):\n            w_current = w if i < mixing_cutoff else w2 if w2 is not None else w\n            x = block(x, w_current)\n        \n        # To RGB\n        img = self.to_rgb(x)\n        return torch.tanh(img)\n\n# Usage\nmodel = StyleGAN(z_dim=512, w_dim=512, img_resolution=256)\nz = torch.randn(4, 512)\ngenerated_images = model(z, truncation_psi=0.7)"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Photorealistic Face Generation",
+      "application": "Generate 1024×1024 photorealistic human faces",
+      "description": "StyleGAN produces faces indistinguishable from photographs. Control attributes: age, gender, ethnicity, expression, pose, lighting, hair style, accessories. Used in entertainment, research, privacy.",
+      "realWorldExample": "ThisPersonDoesNotExist.com uses StyleGAN2 to generate infinite synthetic faces. NVIDIA's StyleGAN3 (2021) generates 4K faces with perfect motion consistency for video. Used in movies for background characters, games for NPC generation, synthetic datasets for face recognition research."
+    },
+    {
+      "domain": "Artistic Style Transfer & Creation",
+      "application": "Generate artwork, landscapes, objects in controllable styles",
+      "description": "StyleGAN trained on art (paintings, portraits, landscapes) generates novel artwork. Style mixing enables creative combinations. Used in digital art, NFTs, creative tools.",
+      "realWorldExample": "Artbreeder (2M+ users) uses StyleGAN for collaborative art creation. Users mix and evolve images. Generated 100M+ images. Many StyleGAN-generated artworks sold as NFTs. Adobe exploring StyleGAN for creative tools."
+    },
+    {
+      "domain": "Data Augmentation & Privacy",
+      "application": "Generate synthetic training data, preserve privacy",
+      "description": "Medical imaging: generate synthetic patient faces/scans. Autonomous driving: generate diverse scenarios. Finance: synthetic customer data. Benefits: unlimited data, no privacy concerns, controllable attributes.",
+      "realWorldExample": "Healthcare: Synthesize medical images for rare conditions (StyleGAN trained on X-rays, MRIs). Privacy: Companies use StyleGAN to create synthetic customer personas for testing (GDPR-compliant). Advertising: Generate diverse faces for ads without model releases."
+    },
+    {
+      "domain": "Semantic Image Editing",
+      "application": "Edit images by manipulating latent vectors",
+      "description": "Find semantic directions in W space (e.g., 'smile', 'age', 'pose'). Move w along these directions to edit attributes while preserving identity. InterFaceGAN, GANSpace, StyleCLIP enable text-guided editing.",
+      "realWorldExample": "StyleCLIP: text-driven editing (\"make him older\", \"add sunglasses\"). Used in photo editing apps. GANSpace: discover principal components in W space for intuitive editing sliders. Research: age progression, virtual try-on, facial reenactment."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "FFHQ (Flickr-Faces-HQ)",
+        "otherMetrics": {
+          "FID": "~2.84 (StyleGAN3), ~4.40 (StyleGAN2)",
+          "resolution": "1024×1024",
+          "note": "State-of-the-art photorealistic faces"
+        }
+      },
+      {
+        "name": "LSUN Bedrooms",
+        "otherMetrics": {
+          "FID": "~2.65 (StyleGAN2)",
+          "resolution": "256×256",
+          "note": "High-quality scene generation"
+        }
+      },
+      {
+        "name": "AFHQ (Animal Faces HQ)",
+        "otherMetrics": {
+          "FID": "~4.5 (StyleGAN2)",
+          "note": "Cats, dogs, wildlife faces at 512×512"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Mapping Network Depth",
+        "recommendedValue": "8 layers",
+        "rationale": "More layers = more disentanglement. 8 layers is sweet spot (diminishing returns beyond). Each layer is 512→512 FC + LeakyReLU."
+      },
+      {
+        "parameter": "Style Mixing Probability",
+        "recommendedValue": "0.9 during training",
+        "rationale": "90% of batches use style mixing (two latent codes). Forces localization of styles. Critical for disentanglement."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.002 for G and D",
+        "rationale": "Use Adam with β1=0, β2=0.99 (different from vanilla GAN). Higher LR than standard GAN due to architecture stability."
+      },
+      {
+        "parameter": "Truncation Psi",
+        "recommendedValue": "0.7 for demos, 1.0 for diversity",
+        "rationale": "ψ=0.7 gives best quality for showcasing. ψ=1.0 for full diversity (evaluation, data generation). ψ=0.5 for very safe samples."
+      },
+      {
+        "parameter": "Progressive Growing (Optional)",
+        "recommendedValue": "4×4 → 8×8 → ... → 1024×1024",
+        "rationale": "StyleGAN1 used progressive growing (start low-res, gradually increase). StyleGAN2 trains all resolutions from start (faster). StyleGAN3 uses alias-free layers."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Blob-like artifacts (StyleGAN1)",
+        "solution": "Upgrade to StyleGAN2. It removes instance normalization artifacts by redesigning generator normalization. Uses weight demodulation instead of AdaIN normalization."
+      },
+      {
+        "problem": "Low disentanglement (PPL metric high)",
+        "solution": "Increase mapping network depth (try 10 layers). Ensure style mixing is enabled (prob=0.9). Train longer. Check W space PPL vs Z space—should be significantly lower."
+      },
+      {
+        "problem": "Mode collapse or poor diversity",
+        "solution": "Use R1 regularization on discriminator (gradient penalty). Ensure batch size is large enough (≥32). Check discriminator isn't too strong—balance G/D capacity. Try different random seeds."
+      },
+      {
+        "problem": "Training instability",
+        "solution": "Use StyleGAN2 improvements: path length regularization, lazy regularization. Ensure proper learning rates (0.002 for both). Use mixed precision (fp16) for stability. Monitor FID/PPL every few thousand iterations."
+      }
+    ]
+  },
+  "comparisons": ["gan", "stylegan2", "stylegan3"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "A Style-Based Generator Architecture for GANs",
+      "url": "https://arxiv.org/abs/1812.04948",
+      "description": "Original StyleGAN paper (2018)"
+    },
+    {
+      "type": "paper",
+      "title": "Analyzing and Improving the Image Quality of StyleGAN",
+      "url": "https://arxiv.org/abs/1912.04958",
+      "description": "StyleGAN2 - removes artifacts, improves quality"
+    },
+    {
+      "type": "code",
+      "title": "Official StyleGAN3 Implementation",
+      "url": "https://github.com/NVlabs/stylegan3",
+      "description": "NVIDIA's official PyTorch implementation"
+    },
+    {
+      "type": "blog",
+      "title": "StyleGAN Explained",
+      "url": "https://towardsdatascience.com/explained-a-style-based-generator-architecture-for-gans-generating-and-tuning-realistic-6cb2be0f431",
+      "description": "Detailed walkthrough with visualizations"
+    }
+  ],
+  "tags": ["stylegan", "generative", "gan", "style-transfer", "face-generation", "2018"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "16 GB (256×256 images)",
+    "recommendedVRAM": "32 GB (1024×1024, A100/V100)",
+    "trainingTime": {
+      "gpu": "1-2 weeks for FFHQ 1024×1024 on 8× V100"
+    },
+    "storageRequirements": "~200 MB (model weights)"
+  }
+}

@@ -1,0 +1,293 @@
+{
+  "id": "ppo",
+  "name": "PPO (Proximal Policy Optimization)",
+  "category": "reinforcement-learning",
+  "subcategory": "Policy Gradient",
+  "year": 2017,
+  "authors": ["John Schulman", "Filip Wolski", "Prafulla Dhariwal", "Alec Radford", "Oleg Klimov"],
+  "paper": "Proximal Policy Optimization Algorithms",
+  "paperUrl": "https://arxiv.org/abs/1707.06347",
+  "description": "Proximal Policy Optimization is the most popular deep RL algorithm in production. PPO is policy gradient—directly optimizes the policy π(a|s) instead of learning Q-values. Why popular? (1) Simple—easier to implement than TRPO, more stable than vanilla PG. (2) Sample-efficient—reuses data via multiple epochs. (3) Robust—works across diverse tasks (robotics, games, NLP). (4) Scalable—parallelizes easily. Key innovation: clipped objective prevents large policy updates. Trust region optimization without complex second-order methods (TRPO). PPO has two variants: PPO-Clip (most common) and PPO-Penalty (KL divergence constraint). OpenAI uses PPO for ChatGPT RLHF, Dota 2 bots (defeated world champions), robotic hand manipulation. DeepMind uses PPO for StarCraft II agents. Industry standard for continuous control (robotics) and text generation alignment.",
+  "plainEnglish": "Imagine training a robot to walk. Policy gradient: directly tell robot 'take action a with probability π(a|s).' Learn π, not Q-values. Problem: naive policy gradient is unstable—one bad update ruins policy. PPO solution: trust region—limit how much policy can change per update. Clip update if new policy differs too much from old. How? (1) Collect trajectories using old policy π_old. (2) Compute advantages: A(s,a) = 'how much better is action a than average in state s?' (3) Update policy π_new to maximize A, but clip ratio r = π_new/π_old to [1-ε, 1+ε] (ε=0.2). Prevents destructive updates. (4) Train for K epochs (K=4) reusing same data—sample-efficient! (5) Repeat. Result: stable, monotonic improvement. PPO is actor-critic: actor (policy network) chooses actions, critic (value network) estimates V(s) for advantages. Used in: OpenAI's Dota 2 bot (trained on 10,000 years of gameplay), ChatGPT fine-tuning (RLHF), robot grasping, autonomous driving.",
+  "keyInnovation": "Clipped surrogate objective: L^CLIP(θ) = E[min(r_t A_t, clip(r_t, 1-ε, 1+ε) A_t)] where r_t = π_θ(a|s)/π_old(a|s). Clip ratio to [0.8, 1.2] (ε=0.2). If advantage A>0 (good action), increase probability (r>1) but cap at 1.2. If A<0 (bad action), decrease (r<1) but cap at 0.8. Prevents catastrophic policy collapse. Generalized Advantage Estimation (GAE): A_t = Σ(γλ)^l δ_{t+l} where δ is TD error. λ controls bias-variance (λ=0.95 typical). Lower variance than Monte Carlo, less bias than TD(0). Multiple epochs: train on same batch for K epochs (K=3-10) before collecting new data. 3-10× more sample-efficient than vanilla PG. Mini-batch updates: split batch into mini-batches, update multiple times. Entropy bonus: add H(π) to objective—encourages exploration. Prevents premature convergence. Value clipping: clip V(s) updates like policy—further stabilization. PPO is simpler than TRPO (no conjugate gradient, Hessian), performs as well or better.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "shared_network",
+        "name": "Shared Feature Extractor",
+        "description": "CNN (vision) or MLP (state). Shared between actor and critic (parameter efficiency).",
+        "parameters": {
+          "type": "mlp",
+          "hidden_dims": [64, 64],
+          "activation": "tanh"
+        },
+        "parameterCount": 8448
+      },
+      {
+        "type": "actor_head",
+        "name": "Policy Head (Actor)",
+        "description": "Outputs action probabilities (discrete) or mean+std (continuous). Stochastic policy.",
+        "parameters": {
+          "input_dim": 64,
+          "output_dim": 4,
+          "output_activation": "softmax"
+        },
+        "parameterCount": 260
+      },
+      {
+        "type": "critic_head",
+        "name": "Value Head (Critic)",
+        "description": "Outputs V(s)—state value for advantage estimation. Single scalar output.",
+        "parameters": {
+          "input_dim": 64,
+          "output_dim": 1,
+          "output_activation": "linear"
+        },
+        "parameterCount": 65
+      }
+    ],
+    "depth": 5,
+    "parameters": 8773,
+    "flops": "~5M per forward pass (actor + critic)",
+    "memoryFootprint": "~35 KB (fp32 model)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Policy Gradient Objective",
+        "latex": "J(\\theta) = \\mathbb{E}_{\\tau \\sim \\pi_\\theta} \\left[\\sum_{t=0}^T \\gamma^t r_t\\right]",
+        "explanation": "Objective: maximize expected cumulative reward. τ is trajectory (s_0, a_0, r_0, s_1, ...). π_θ is policy. Gradient: ∇J = E[∇ log π(a|s) A(s,a)]—REINFORCE. Problem: high variance, sample inefficiency. PPO improves this.",
+        "variables": {
+          "τ": "Trajectory (episode)",
+          "π_θ": "Policy network",
+          "γ": "Discount factor (0.99)"
+        }
+      },
+      {
+        "name": "PPO Clipped Objective",
+        "latex": "L^{\\text{CLIP}}(\\theta) = \\mathbb{E}_t \\left[\\min\\left(r_t(\\theta) A_t, \\text{clip}(r_t(\\theta), 1-\\varepsilon, 1+\\varepsilon) A_t\\right)\\right]",
+        "explanation": "THE CORE. r_t = π_θ(a_t|s_t) / π_old(a_t|s_t) is probability ratio. Clip to [1-ε, 1+ε] (ε=0.2). If A_t > 0 (good action): want r_t > 1 (increase prob) but clip at 1.2. If A_t < 0 (bad action): want r_t < 1 (decrease) but clip at 0.8. Min(...) takes pessimistic bound—conservative update. Prevents large policy changes.",
+        "variables": {
+          "r_t": "Importance ratio (new/old policy)",
+          "A_t": "Advantage (how good is action)",
+          "ε": "Clip parameter (0.2)",
+          "clip": "Clamp to [1-ε, 1+ε]"
+        }
+      },
+      {
+        "name": "Generalized Advantage Estimation (GAE)",
+        "latex": "A_t^{\\text{GAE}(\\gamma,\\lambda)} = \\sum_{l=0}^{\\infty} (\\gamma \\lambda)^l \\delta_{t+l}, \\quad \\delta_t = r_t + \\gamma V(s_{t+1}) - V(s_t)",
+        "explanation": "Estimate advantage A(s,a) = Q(s,a) - V(s). δ_t is TD error. GAE exponentially weights TD errors. λ controls bias-variance: λ=0 (1-step TD, low variance, high bias), λ=1 (Monte Carlo, high variance, low bias). λ=0.95 typical. Critical for PPO performance.",
+        "variables": {
+          "δ_t": "TD error (temporal difference)",
+          "λ": "GAE parameter (0.95)",
+          "γ": "Discount factor",
+          "V(s)": "Value function (critic)"
+        }
+      },
+      {
+        "name": "Value Function Loss",
+        "latex": "L^{VF}(\\theta) = \\mathbb{E}_t \\left[(V_\\theta(s_t) - V_t^{\\text{target}})^2\\right]",
+        "explanation": "Critic loss: MSE between predicted V(s) and target. Target: V_target = Σ γ^t r_t (Monte Carlo return) or r + γV(s') (TD target). PPO uses clipped value loss (optional): clip V updates like policy. Train critic alongside actor.",
+        "variables": {
+          "V_θ(s)": "Predicted state value",
+          "V_target": "TD or MC return"
+        }
+      },
+      {
+        "name": "Entropy Bonus (Exploration)",
+        "latex": "H(\\pi_\\theta) = -\\mathbb{E}_{a \\sim \\pi_\\theta} [\\log \\pi_\\theta(a|s)]",
+        "explanation": "Add entropy to objective: L = L^CLIP + c_1 L^VF - c_2 H(π). Entropy H encourages exploration (prevents premature convergence to deterministic policy). c_2=0.01 typical. Higher entropy = more random actions. Decay c_2 over training.",
+        "variables": {
+          "H(π)": "Policy entropy",
+          "c_2": "Entropy coefficient (0.01)"
+        }
+      },
+      {
+        "name": "Total PPO Loss",
+        "latex": "L^{\\text{TOTAL}}(\\theta) = L^{\\text{CLIP}}(\\theta) - c_1 L^{VF}(\\theta) + c_2 H(\\pi_\\theta)",
+        "explanation": "Combine three terms: (1) Clipped policy loss (maximize). (2) Value function loss (minimize, c_1=0.5). (3) Entropy bonus (maximize, c_2=0.01). Single optimizer (Adam) updates both actor and critic. Balance via coefficients c_1, c_2.",
+        "variables": {
+          "c_1": "Value loss coefficient (0.5)",
+          "c_2": "Entropy coefficient (0.01)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Monotonic Improvement Guarantee (Approximate)",
+        "statement": "PPO's clipped objective provides approximate monotonic policy improvement—each update doesn't make policy worse (unlike vanilla PG which can catastrophically fail).",
+        "significance": "Explains PPO's stability. Clipping enforces trust region—policy changes are conservative. Empirically works as well as TRPO (which has theoretical guarantee) but simpler."
+      },
+      {
+        "name": "Sample Efficiency via Reuse",
+        "statement": "PPO can train for K epochs on same batch (K=3-10) via importance sampling correction (ratio r_t). Vanilla PG: 1 epoch (on-policy).",
+        "significance": "3-10× more sample-efficient than REINFORCE or A3C. Critical for expensive environments (robotics). Enabled by clipping—prevents divergence from reuse."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.optim as optim\nimport numpy as np\n\nclass ActorCritic(nn.Module):\n    def __init__(self, state_dim=4, action_dim=2, hidden_dim=64):\n        super().__init__()\n        # Shared layers\n        self.shared = nn.Sequential(\n            nn.Linear(state_dim, hidden_dim),\n            nn.Tanh(),\n            nn.Linear(hidden_dim, hidden_dim),\n            nn.Tanh()\n        )\n        \n        # Actor head (policy)\n        self.actor = nn.Linear(hidden_dim, action_dim)\n        \n        # Critic head (value)\n        self.critic = nn.Linear(hidden_dim, 1)\n    \n    def forward(self, state):\n        shared_out = self.shared(state)\n        return shared_out\n    \n    def act(self, state):\n        shared_out = self.forward(state)\n        action_logits = self.actor(shared_out)\n        action_probs = torch.softmax(action_logits, dim=-1)\n        dist = torch.distributions.Categorical(action_probs)\n        action = dist.sample()\n        return action, dist.log_prob(action), dist.entropy()\n    \n    def evaluate(self, state, action):\n        shared_out = self.forward(state)\n        action_logits = self.actor(shared_out)\n        action_probs = torch.softmax(action_logits, dim=-1)\n        dist = torch.distributions.Categorical(action_probs)\n        \n        action_log_probs = dist.log_prob(action)\n        entropy = dist.entropy()\n        value = self.critic(shared_out)\n        \n        return action_log_probs, value, entropy\n\nclass PPO:\n    def __init__(self, state_dim, action_dim, lr=3e-4, gamma=0.99, gae_lambda=0.95, \n                 clip_eps=0.2, c1=0.5, c2=0.01, epochs=10, batch_size=64):\n        self.gamma = gamma\n        self.gae_lambda = gae_lambda\n        self.clip_eps = clip_eps\n        self.c1 = c1  # value loss coef\n        self.c2 = c2  # entropy coef\n        self.epochs = epochs\n        self.batch_size = batch_size\n        \n        self.policy = ActorCritic(state_dim, action_dim)\n        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)\n        \n        # Storage for rollouts\n        self.states = []\n        self.actions = []\n        self.rewards = []\n        self.log_probs = []\n        self.values = []\n        self.dones = []\n    \n    def select_action(self, state):\n        with torch.no_grad():\n            state_tensor = torch.FloatTensor(state).unsqueeze(0)\n            action, log_prob, _ = self.policy.act(state_tensor)\n            value = self.policy.critic(self.policy.forward(state_tensor))\n        \n        self.states.append(state)\n        self.actions.append(action.item())\n        self.log_probs.append(log_prob.item())\n        self.values.append(value.item())\n        \n        return action.item()\n    \n    def store_transition(self, reward, done):\n        self.rewards.append(reward)\n        self.dones.append(done)\n    \n    def compute_gae(self, next_value):\n        # Compute advantages using GAE\n        advantages = []\n        gae = 0\n        \n        values = self.values + [next_value]\n        \n        for t in reversed(range(len(self.rewards))):\n            delta = self.rewards[t] + self.gamma * values[t+1] * (1 - self.dones[t]) - values[t]\n            gae = delta + self.gamma * self.gae_lambda * (1 - self.dones[t]) * gae\n            advantages.insert(0, gae)\n        \n        returns = [adv + val for adv, val in zip(advantages, self.values)]\n        return advantages, returns\n    \n    def update(self, next_state):\n        # Get next value for GAE\n        with torch.no_grad():\n            next_value = self.policy.critic(\n                self.policy.forward(torch.FloatTensor(next_state).unsqueeze(0))\n            ).item()\n        \n        # Compute advantages\n        advantages, returns = self.compute_gae(next_value)\n        \n        # Convert to tensors\n        states = torch.FloatTensor(np.array(self.states))\n        actions = torch.LongTensor(self.actions)\n        old_log_probs = torch.FloatTensor(self.log_probs)\n        advantages = torch.FloatTensor(advantages)\n        returns = torch.FloatTensor(returns)\n        \n        # Normalize advantages\n        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)\n        \n        # PPO update for K epochs\n        for _ in range(self.epochs):\n            # Evaluate actions\n            log_probs, values, entropy = self.policy.evaluate(states, actions)\n            values = values.squeeze()\n            \n            # Importance ratio\n            ratios = torch.exp(log_probs - old_log_probs)\n            \n            # Clipped surrogate objective\n            surr1 = ratios * advantages\n            surr2 = torch.clamp(ratios, 1 - self.clip_eps, 1 + self.clip_eps) * advantages\n            policy_loss = -torch.min(surr1, surr2).mean()\n            \n            # Value loss\n            value_loss = nn.functional.mse_loss(values, returns)\n            \n            # Entropy bonus\n            entropy_loss = -entropy.mean()\n            \n            # Total loss\n            loss = policy_loss + self.c1 * value_loss + self.c2 * entropy_loss\n            \n            # Optimize\n            self.optimizer.zero_grad()\n            loss.backward()\n            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 0.5)\n            self.optimizer.step()\n        \n        # Clear storage\n        self.states = []\n        self.actions = []\n        self.rewards = []\n        self.log_probs = []\n        self.values = []\n        self.dones = []\n\n# Training loop\nagent = PPO(state_dim=4, action_dim=2)\n\nfor episode in range(1000):\n    state = env.reset()\n    episode_reward = 0\n    \n    for t in range(1000):\n        action = agent.select_action(state)\n        next_state, reward, done, _ = env.step(action)\n        \n        agent.store_transition(reward, done)\n        episode_reward += reward\n        state = next_state\n        \n        if done:\n            break\n    \n    # Update policy\n    agent.update(state)\n    \n    print(f'Episode {episode}, Reward: {episode_reward}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Robotics (Manipulation, Locomotion)",
+      "application": "Robot control in continuous action spaces",
+      "description": "PPO excels at continuous control: robot arm grasping, quadruped walking, humanoid locomotion. Learns smooth, stable policies. Sample-efficient for expensive real-world trials. Sim-to-real transfer: train in simulation, deploy on robot.",
+      "realWorldExample": "OpenAI's robotic hand (Dactyl): PPO trains in simulation, solves Rubik's cube on real robot. Boston Dynamics: PPO for legged robot balance. Waymo: PPO for autonomous driving planning. NVIDIA IsaacGym: GPU-accelerated PPO for robot learning."
+    },
+    {
+      "domain": "Game AI (Dota 2, StarCraft II)",
+      "application": "Complex multi-agent strategy games",
+      "description": "OpenAI Five (Dota 2): PPO trained on 10,000 years of gameplay (distributed). Defeated world champion team (2019). DeepMind's AlphaStar (StarCraft II): PPO + league training. Superhuman at Grandmaster level. Multi-agent coordination, long-term strategy.",
+      "realWorldExample": "OpenAI Five: 256 GPUs + 128,000 CPU cores, 180 years/day training. AlphaStar: reached top 0.2% of players. Hide-and-seek emergent behavior: PPO agents develop tool use, strategies without explicit reward."
+    },
+    {
+      "domain": "NLP (RLHF for Language Models)",
+      "application": "Fine-tuning LLMs with human feedback",
+      "description": "ChatGPT, GPT-4, Claude use PPO for RLHF (Reinforcement Learning from Human Feedback). Train reward model on human preferences, use PPO to optimize LLM policy. Makes models helpful, harmless, honest. Prevents mode collapse (KL penalty from pretrained model).",
+      "realWorldExample": "OpenAI ChatGPT: PPO aligns GPT-3.5 with human values. Anthropic Claude: Constitutional AI uses PPO. Google Bard, Meta LLaMA: RLHF with PPO variants. Critical for safe, aligned AI systems."
+    },
+    {
+      "domain": "Finance & Resource Allocation",
+      "application": "Portfolio optimization, trading execution, datacenter management",
+      "description": "PPO for dynamic portfolio rebalancing (continuous actions: buy/sell amounts). Trading execution: minimize market impact. Google DeepMind: PPO for datacenter cooling (40% energy reduction). Cloud resource allocation.",
+      "realWorldExample": "Google datacenters: PPO controls cooling systems, saves millions in energy costs. Quantitative trading firms use PPO for execution algorithms. AWS: PPO for resource provisioning, cost optimization."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MuJoCo (Continuous Control)",
+        "otherMetrics": {
+          "HalfCheetah": "~5000 reward (PPO)",
+          "Humanoid": "~6000 reward",
+          "Training": "1-3M timesteps",
+          "note": "Standard benchmark for continuous RL"
+        }
+      },
+      {
+        "name": "Atari 2600",
+        "otherMetrics": {
+          "Human Normalized": "~150% (PPO)",
+          "vs_DQN": "Comparable, more stable",
+          "note": "PPO works on discrete too"
+        }
+      },
+      {
+        "name": "Dota 2 (OpenAI Five)",
+        "otherMetrics": {
+          "Performance": "Defeated world champions (TI8)",
+          "Training": "10,000 years gameplay",
+          "note": "Largest PPO application"
+        }
+      },
+      {
+        "name": "Robotics (Isaac Gym)",
+        "otherMetrics": {
+          "Shadow Hand": "Solved in <1 hour (GPU parallel)",
+          "Speedup": "1000× faster than CPU",
+          "note": "GPU-accelerated PPO"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Clip Range (ε)",
+        "recommendedValue": "0.2",
+        "rationale": "Standard value. Higher (0.3): allows larger policy changes, less conservative. Lower (0.1): more conservative, slower learning. Rarely needs tuning."
+      },
+      {
+        "parameter": "GAE Lambda (λ)",
+        "recommendedValue": "0.95",
+        "rationale": "Controls bias-variance trade-off. λ=0: 1-step TD (low variance, high bias). λ=1: Monte Carlo (high variance, low bias). 0.95 balances both. Try 0.9-0.99."
+      },
+      {
+        "parameter": "Number of Epochs",
+        "recommendedValue": "3-10",
+        "rationale": "How many times to train on same batch. More epochs: better sample efficiency but overfitting risk. 3-4 for simple tasks, 10 for complex. Monitor KL divergence—stop if too large."
+      },
+      {
+        "parameter": "Batch Size / Rollout Length",
+        "recommendedValue": "2048-4096 timesteps",
+        "rationale": "Collect this many steps before update. Larger: more stable, better advantage estimates. Smaller: faster updates. Balance with compute. Parallel environments: 8-16 × 256 steps."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "3e-4 (simple) to 3e-5 (complex)",
+        "rationale": "Higher than DQN. Use learning rate annealing (linear decay). Too high: instability. Too low: slow convergence. Start 3e-4, tune if needed."
+      },
+      {
+        "parameter": "Value Loss Coefficient (c1)",
+        "recommendedValue": "0.5",
+        "rationale": "Weight of value loss vs policy loss. Higher: prioritize critic training. Standard 0.5 works well. Try 1.0 if critic is poor."
+      },
+      {
+        "parameter": "Entropy Coefficient (c2)",
+        "recommendedValue": "0.01 (start), decay to 0",
+        "rationale": "Encourages exploration. Start 0.01, linearly decay to 0 over training. Higher (0.1): more exploration. Zero: fully greedy (risky early on)."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Policy collapse or divergence",
+        "solution": "Reduce learning rate (3e-4 → 1e-4). Reduce epochs (10 → 3). Check KL divergence—if > 0.01, stop early. Use adaptive KL (PPO-Penalty variant). Ensure advantage normalization."
+      },
+      {
+        "problem": "Sample inefficiency or slow learning",
+        "solution": "Increase epochs (3 → 10) for more reuse. Larger batches (2048 → 4096). Parallelize environments (use VecEnv). Tune GAE λ (try 0.9 or 0.99). Check advantage estimation—should have mean~0."
+      },
+      {
+        "problem": "Poor exploration",
+        "solution": "Increase entropy bonus (0.01 → 0.1). Use curiosity-driven exploration (ICM, RND). Action noise for continuous control. Longer ε decay for ε-greedy (if discrete)."
+      },
+      {
+        "problem": "Value function inaccurate",
+        "solution": "Increase c1 (0.5 → 1.0). Use value clipping (like PPO policy clip). More critic capacity (deeper network). Separate optimizers for actor/critic with different LRs."
+      }
+    ]
+  },
+  "comparisons": ["dqn", "a3c", "sac", "trpo"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Proximal Policy Optimization Algorithms",
+      "url": "https://arxiv.org/abs/1707.06347",
+      "description": "Original PPO paper (2017) by Schulman et al."
+    },
+    {
+      "type": "paper",
+      "title": "High-Dimensional Continuous Control Using Generalized Advantage Estimation",
+      "url": "https://arxiv.org/abs/1506.02438",
+      "description": "GAE paper—critical for PPO performance"
+    },
+    {
+      "type": "code",
+      "title": "Stable-Baselines3 PPO",
+      "url": "https://github.com/DLR-RM/stable-baselines3",
+      "description": "Production-quality PPO implementation"
+    },
+    {
+      "type": "blog",
+      "title": "OpenAI Spinning Up PPO",
+      "url": "https://spinningup.openai.com/en/latest/algorithms/ppo.html",
+      "description": "PPO tutorial with code and intuition"
+    }
+  ],
+  "tags": ["ppo", "reinforcement-learning", "policy-gradient", "actor-critic", "robotics", "2017"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB (simple tasks)",
+    "recommendedVRAM": "8 GB (parallel environments)",
+    "trainingTime": {
+      "gpu": "1-4 hours for MuJoCo tasks (1-3M steps)"
+    },
+    "storageRequirements": "~35 KB (model, small network)"
+  }
+}

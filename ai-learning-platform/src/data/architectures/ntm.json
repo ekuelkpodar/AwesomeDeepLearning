@@ -1,0 +1,196 @@
+{
+  "id": "ntm",
+  "name": "Neural Turing Machine",
+  "category": "hybrid",
+  "description": "Differentiable neural computer with external memory matrix. Combines neural networks with memory read/write via attention, enabling algorithmic reasoning and generalization.",
+  "icon": "cpu",
+  "yearIntroduced": 2014,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Content-Based Addressing (Similarity)",
+        "latex": "w_t^c(i) = \\frac{\\exp(\\beta_t K[k_t, M_t(i)])}{\\sum_j \\exp(\\beta_t K[k_t, M_t(j)])}",
+        "explanation": "THE CORE. Attention over memory rows. k_t = key vector (from controller). M_t(i) = memory row i. K[·,·] = cosine similarity. β_t = sharpness (focus strength). Softmax → weights w^c. Similar to Transformer attention but over memory!",
+        "variables": {
+          "w_t^c": "Content-based attention weights (N-dim)",
+          "k_t": "Key vector for reading/writing",
+          "M_t": "Memory matrix (N × M)",
+          "β_t": "Sharpness parameter (β → ∞ = argmax)",
+          "K": "Cosine similarity"
+        }
+      },
+      {
+        "name": "Location-Based Addressing (Shift & Sharpen)",
+        "latex": "\\tilde{w}_t(i) = \\sum_j w_t(j) s_t(i - j), \\quad w_t(i) = \\frac{\\tilde{w}_t(i)^{\\gamma_t}}{\\sum_j \\tilde{w}_t(j)^{\\gamma_t}}",
+        "explanation": "After content addressing, optionally shift focus (convolutional shift s_t) and sharpen (exponent γ_t). Enables sequential access patterns (e.g., iterate through list). Hybrid = content + location.",
+        "variables": {
+          "s_t": "Shift distribution (allowed shifts: -1, 0, +1)",
+          "γ_t": "Sharpening parameter (γ > 1 concentrates)",
+          "w̃_t": "Weights after shift, before sharpen"
+        }
+      },
+      {
+        "name": "Memory Read",
+        "latex": "r_t = \\sum_i w_t^r(i) M_t(i)",
+        "explanation": "Read = weighted sum of memory rows. w^r = read attention weights (from addressing). r_t = read vector (M-dim). Multiple read heads → multiple r_t. Fed to controller as input.",
+        "variables": {
+          "r_t": "Read vector (M-dimensional)",
+          "w_t^r": "Read weights (from addressing mechanism)",
+          "M_t(i)": "Memory row i"
+        }
+      },
+      {
+        "name": "Memory Write (Erase & Add)",
+        "latex": "M_t(i) = M_{t-1}(i) [1 - w_t^w(i) e_t] + w_t^w(i) a_t",
+        "explanation": "Write = erase + add. e_t = erase vector (0-1), a_t = add vector (new content). w^w = write weights. Erase: multiply row by (1 - w·e) to forget. Add: blend in new content w·a. Differentiable!",
+        "variables": {
+          "e_t": "Erase vector (M-dim, sigmoid)",
+          "a_t": "Add vector (M-dim, what to write)",
+          "w_t^w": "Write weights (where to write)"
+        }
+      },
+      {
+        "name": "Controller (LSTM/Feedforward)",
+        "latex": "o_t, h_t = \\text{Controller}(x_t, r_{t-1}, h_{t-1})",
+        "explanation": "Controller = LSTM or feedforward network. Input: x_t (external input) + r_{t-1} (previous read). Output: o_t (external output) + addressing parameters (k_t, β_t, s_t, γ_t, e_t, a_t). Learns how to use memory.",
+        "variables": {
+          "x_t": "External input at time t",
+          "o_t": "External output (prediction)",
+          "h_t": "Controller hidden state"
+        }
+      },
+      {
+        "name": "End-to-End Differentiability",
+        "latex": "\\frac{\\partial L}{\\partial M_t} = \\frac{\\partial L}{\\partial r_t} \\frac{\\partial r_t}{\\partial M_t} + \\frac{\\partial L}{\\partial M_{t+1}} \\frac{\\partial M_{t+1}}{\\partial M_t}",
+        "explanation": "KEY INNOVATION. All operations differentiable → backprop through memory! Gradient flows: read (∂r/∂M), write (∂M_{t+1}/∂M_t). Enables learning memory access patterns end-to-end via gradient descent.",
+        "variables": {
+          "L": "Loss function",
+          "∂L/∂M": "Gradient w.r.t. memory (backprop)",
+          "∂r/∂M": "Read gradient (soft attention)",
+          "∂M/∂M": "Write gradient (erase/add)"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "NTM (2014)",
+        "description": "Original: LSTM controller + external memory + content/location addressing. Copy, repeat, associative recall tasks."
+      },
+      {
+        "name": "Differentiable Neural Computer (DNC, 2016)",
+        "description": "Extension: temporal links, allocation, usage tracking. Solves graph traversal, shortest path, question answering."
+      },
+      {
+        "name": "Sparse Access Memory (SAM)",
+        "description": "Sparse writes for efficiency. Scale to millions of memory slots."
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass NTMMemory:\n    def __init__(self, N=128, M=20):\n        \"\"\"N = memory slots, M = memory vector size.\"\"\"\n        self.N = N\n        self.M = M\n        self.memory = torch.zeros(N, M)  # Memory matrix\n    \n    def content_addressing(self, k, beta):\n        \"\"\"k: key (M,), beta: scalar. Returns: weights (N,).\"\"\"\n        # Cosine similarity: K[k, M_i] = k·M_i / (||k|| ||M_i||)\n        k_norm = k / (torch.norm(k) + 1e-8)\n        mem_norm = self.memory / (torch.norm(self.memory, dim=1, keepdim=True) + 1e-8)\n        similarity = torch.matmul(mem_norm, k_norm)  # (N,)\n        \n        # Softmax with sharpness beta\n        weights = F.softmax(beta * similarity, dim=0)\n        return weights\n    \n    def location_addressing(self, w_content, shift, gamma):\n        \"\"\"Shift and sharpen.\n        w_content: (N,), shift: (3,) for [-1,0,+1], gamma: scalar.\n        \"\"\"\n        # Convolutional shift (circular)\n        N = w_content.size(0)\n        w_shifted = torch.zeros_like(w_content)\n        \n        for i in range(N):\n            w_shifted[i] = (\n                shift[0] * w_content[(i - 1) % N] +\n                shift[1] * w_content[i] +\n                shift[2] * w_content[(i + 1) % N]\n            )\n        \n        # Sharpen\n        w_sharpened = w_shifted ** gamma\n        w_sharpened = w_sharpened / (w_sharpened.sum() + 1e-8)\n        return w_sharpened\n    \n    def read(self, w):\n        \"\"\"w: weights (N,). Returns: read vector (M,).\"\"\"\n        return torch.matmul(w, self.memory)  # Weighted sum\n    \n    def write(self, w, erase, add):\n        \"\"\"w: (N,), erase: (M,), add: (M,).\"\"\"\n        # Erase: M_t = M_{t-1} * (1 - w ⊗ e)\n        erase_matrix = torch.outer(w, erase)  # (N, M)\n        self.memory = self.memory * (1 - erase_matrix)\n        \n        # Add: M_t += w ⊗ a\n        add_matrix = torch.outer(w, add)\n        self.memory = self.memory + add_matrix\n\nclass NTMController(nn.Module):\n    def __init__(self, input_size, output_size, controller_size=100, M=20):\n        super().__init__()\n        self.M = M\n        \n        # LSTM controller\n        self.lstm = nn.LSTMCell(input_size + M, controller_size)  # input + read\n        \n        # Output heads\n        self.fc_out = nn.Linear(controller_size, output_size)\n        \n        # Addressing heads (read)\n        self.fc_read_key = nn.Linear(controller_size, M)\n        self.fc_read_beta = nn.Linear(controller_size, 1)\n        self.fc_read_shift = nn.Linear(controller_size, 3)\n        self.fc_read_gamma = nn.Linear(controller_size, 1)\n        \n        # Write heads\n        self.fc_write_key = nn.Linear(controller_size, M)\n        self.fc_write_beta = nn.Linear(controller_size, 1)\n        self.fc_write_shift = nn.Linear(controller_size, 3)\n        self.fc_write_gamma = nn.Linear(controller_size, 1)\n        self.fc_erase = nn.Linear(controller_size, M)\n        self.fc_add = nn.Linear(controller_size, M)\n    \n    def forward(self, x, prev_read, prev_state):\n        \"\"\"x: (batch, input_size), prev_read: (batch, M).\"\"\"\n        # Controller: input + previous read\n        controller_input = torch.cat([x, prev_read], dim=1)\n        h, c = self.lstm(controller_input, prev_state)\n        \n        # External output\n        out = self.fc_out(h)\n        \n        # Read addressing parameters\n        k_read = torch.tanh(self.fc_read_key(h))\n        beta_read = F.softplus(self.fc_read_beta(h)) + 1  # β >= 1\n        shift_read = F.softmax(self.fc_read_shift(h), dim=1)\n        gamma_read = F.softplus(self.fc_read_gamma(h)) + 1  # γ >= 1\n        \n        # Write addressing parameters\n        k_write = torch.tanh(self.fc_write_key(h))\n        beta_write = F.softplus(self.fc_write_beta(h)) + 1\n        shift_write = F.softmax(self.fc_write_shift(h), dim=1)\n        gamma_write = F.softplus(self.fc_write_gamma(h)) + 1\n        erase = torch.sigmoid(self.fc_erase(h))\n        add = torch.tanh(self.fc_add(h))\n        \n        return out, (h, c), {\n            'read': (k_read, beta_read, shift_read, gamma_read),\n            'write': (k_write, beta_write, shift_write, gamma_write, erase, add)\n        }\n\n# Example: Copy task\nntm_memory = NTMMemory(N=128, M=20)\ncontroller = NTMController(input_size=8, output_size=8, M=20)\n\n# Training loop (simplified)\nfor epoch in range(100):\n    # Generate random sequence to copy\n    seq_length = 10\n    input_seq = torch.randn(seq_length, 1, 8)  # (T, batch, input_size)\n    \n    # Initialize\n    prev_read = torch.zeros(1, 20)\n    prev_state = (torch.zeros(1, 100), torch.zeros(1, 100))\n    \n    outputs = []\n    \n    # Read phase\n    for t in range(seq_length):\n        out, prev_state, params = controller(input_seq[t], prev_read, prev_state)\n        \n        # Read from memory\n        k_r, beta_r, shift_r, gamma_r = params['read']\n        w_content = ntm_memory.content_addressing(k_r[0], beta_r[0])\n        w_read = ntm_memory.location_addressing(w_content, shift_r[0], gamma_r[0])\n        prev_read = ntm_memory.read(w_read).unsqueeze(0)\n        \n        # Write to memory\n        k_w, beta_w, shift_w, gamma_w, erase, add = params['write']\n        w_content_w = ntm_memory.content_addressing(k_w[0], beta_w[0])\n        w_write = ntm_memory.location_addressing(w_content_w, shift_w[0], gamma_w[0])\n        ntm_memory.write(w_write, erase[0], add[0])\n    \n    # Write phase: recall and output\n    for t in range(seq_length):\n        out, prev_state, params = controller(torch.zeros(1, 8), prev_read, prev_state)\n        outputs.append(out)\n        \n        # Read from memory\n        k_r, beta_r, shift_r, gamma_r = params['read']\n        w_content = ntm_memory.content_addressing(k_r[0], beta_r[0])\n        w_read = ntm_memory.location_addressing(w_content, shift_r[0], gamma_r[0])\n        prev_read = ntm_memory.read(w_read).unsqueeze(0)\n    \n    # Compute loss (outputs vs input_seq)\n    # Backprop through memory operations!\n    print(f'Epoch {epoch}: NTM learning to copy sequences')",
+    "keyComponents": [
+      "External memory matrix (differentiable)",
+      "Content-based addressing (attention)",
+      "Location-based addressing (shift)",
+      "Erase & add write mechanism",
+      "LSTM/feedforward controller"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Algorithmic Tasks (Copy, Sort, Repeat)",
+      "description": "NTM learns to copy sequences, repeat patterns, associative recall. Generalizes to longer sequences than training (length extrapolation). Outperforms LSTMs on algorithmic reasoning.",
+      "example": "Copy task: 100% accuracy on sequences up to 120 items (trained on 20)"
+    },
+    {
+      "title": "Question Answering (bAbI)",
+      "description": "DNC (Differentiable Neural Computer) solves bAbI QA dataset. Learns graph traversal, shortest path, temporal reasoning. Uses temporal links in memory for sequential dependencies.",
+      "example": "bAbI: 16/20 tasks solved perfectly, vs 14/20 for LSTM"
+    },
+    {
+      "title": "One-Shot Learning",
+      "description": "Meta-learning with external memory. Store few-shot examples in memory, retrieve for classification. Competitive with MAML, Prototypical Networks on Omniglot.",
+      "example": "Omniglot 5-way 1-shot: 95.8% accuracy"
+    },
+    {
+      "title": "Program Synthesis",
+      "description": "Learn to execute simple programs (input/output examples). Memory stores intermediate variables, execution trace. Learns stack, queue, pointer manipulation.",
+      "example": "Learns bubble sort, binary search from input/output pairs"
+    }
+  ],
+  "benchmarks": {
+    "Copy Task": "100% accuracy (generalization to 6× longer sequences)",
+    "bAbI QA": "16/20 tasks solved (DNC)",
+    "Omniglot (1-shot)": "95.8% accuracy",
+    "Training Time": "2-5× slower than LSTM (memory overhead)",
+    "Parameters": "2-3× more than LSTM (addressing heads)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Start with small memory (N=128, M=20). Scale up only if needed.",
+      "reason": "Memory operations are O(N·M) per timestep. Large memory = slow training."
+    },
+    {
+      "tip": "Use curriculum learning: start with short sequences, gradually increase length",
+      "reason": "NTM struggles to learn memory access from scratch. Curriculum helps bootstrap."
+    },
+    {
+      "tip": "Clip gradients aggressively (max_norm=10). NTM gradients are noisy.",
+      "reason": "Backprop through memory can explode. Clipping stabilizes training."
+    },
+    {
+      "tip": "Initialize memory to zero, not random. Use Xavier init for controller.",
+      "reason": "Random memory → chaotic addressing early in training. Zero memory is stable."
+    },
+    {
+      "tip": "Use multiple read heads for complex tasks (2-4 heads typical)",
+      "reason": "Single head bottleneck. Multiple heads enable parallel memory access (like multi-head attention)."
+    }
+  ],
+  "comparisons": ["lstm", "transformer", "dnc"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Neural Turing Machines",
+      "url": "https://arxiv.org/abs/1410.5401",
+      "description": "Original NTM paper (Graves et al., 2014)"
+    },
+    {
+      "type": "paper",
+      "title": "Hybrid Computing Using a Neural Network with Dynamic External Memory (DNC)",
+      "url": "https://www.nature.com/articles/nature20101",
+      "description": "Differentiable Neural Computer (Nature, 2016)"
+    },
+    {
+      "type": "code",
+      "title": "PyTorch NTM Implementation",
+      "url": "https://github.com/loudinthecloud/pytorch-ntm",
+      "description": "Clean NTM implementation with copy task"
+    },
+    {
+      "type": "blog",
+      "title": "Attention and Augmented Recurrent Neural Networks (Distill)",
+      "url": "https://distill.pub/2016/augmented-rnns/",
+      "description": "Beautiful interactive article on NTM, attention"
+    },
+    {
+      "type": "tutorial",
+      "title": "Building a Neural Turing Machine",
+      "url": "https://blog.acolyer.org/2016/03/09/neural-turing-machines/",
+      "description": "Step-by-step walkthrough with diagrams"
+    }
+  ],
+  "tags": ["ntm", "memory", "attention", "hybrid", "differentiable", "reasoning", "2014"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "8 GB",
+    "recommendedVRAM": "16 GB (for large memory)",
+    "trainingTime": {
+      "copy_task": "2-4 hours on GPU (small memory)",
+      "babi": "1-2 days on GPU (DNC)"
+    },
+    "typicalBatchSize": 16,
+    "notes": "Memory operations are O(N·M) per timestep. Backprop through memory is memory-intensive. Use gradient checkpointing for long sequences."
+  }
+}

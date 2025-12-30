@@ -1,0 +1,259 @@
+{
+  "id": "autoencoder",
+  "name": "Autoencoder (Vanilla)",
+  "category": "autoencoder",
+  "subcategory": "Basic Autoencoders",
+  "year": 1986,
+  "authors": ["Geoffrey Hinton", "Rumelhart and McClelland"],
+  "paper": "Learning Internal Representations by Error Propagation",
+  "paperUrl": "https://web.stanford.edu/class/psych209a/ReadingsByDate/02_06/PDPVolIChapter8.pdf",
+  "description": "Autoencoders are unsupervised neural networks that learn efficient data representations (encodings) by training the network to reconstruct its input. The architecture consists of an encoder that compresses input to a lower-dimensional latent space (bottleneck), and a decoder that reconstructs the original input from this compressed representation. By forcing information through a bottleneck, the network learns to capture the most salient features of the data. This simple yet powerful idea enables dimensionality reduction, feature learning, anomaly detection, and generative modeling.",
+  "plainEnglish": "Think of an autoencoder like playing a game of 'telephone' with yourself, but through a narrow pipe. You (the encoder) must compress a message into just a few words (latent code), then reconstruct the full message (decoder) from those few words. To succeed, you learn what information is truly essential! For images, the encoder might compress a 28×28 MNIST digit (784 pixels) into just 32 numbers—losing 96% of data. Yet the decoder can still reconstruct a recognizable digit because the 32-number code captures essential features like 'it's curved at top, straight at bottom' (the digit 2). The network is never told what features to learn—it discovers them automatically by trying to minimize reconstruction error. This unsupervised learning is powerful: no labeled data needed!",
+  "keyInnovation": "Self-supervised learning via reconstruction: the target is the input itself! This eliminates need for manual labels. The bottleneck constraint forces dimensionality reduction and feature learning. Unlike PCA (linear), autoencoders learn non-linear representations via deep networks. The latent space becomes a useful feature space for downstream tasks (clustering, classification, generation). Modern variants (VAE, β-VAE) add probabilistic structure enabling generation of new samples. Autoencoders influenced representation learning, sparked the deep learning revival (2006 pre-training), and evolved into powerful generative models.",
+  "architecture": {
+    "inputShape": [784],
+    "outputShape": [784],
+    "layers": [
+      {
+        "type": "dense",
+        "name": "Encoder Layer 1",
+        "description": "First compression layer",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 200960
+      },
+      {
+        "type": "dense",
+        "name": "Encoder Layer 2 (Bottleneck)",
+        "description": "Latent representation - compressed to 32 dimensions",
+        "parameters": {
+          "units": 32,
+          "activation": "relu"
+        },
+        "parameterCount": 8224
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Layer 1",
+        "description": "First decompression layer",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 8448
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Layer 2 (Output)",
+        "description": "Reconstruct to original dimension",
+        "parameters": {
+          "units": 784,
+          "activation": "sigmoid"
+        },
+        "parameterCount": 201488
+      }
+    ],
+    "depth": 4,
+    "parameters": 419120,
+    "flops": "~840K",
+    "memoryFootprint": "~1.7 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Encoding",
+        "latex": "\\mathbf{z} = f_{\\theta}(\\mathbf{x}) = \\sigma(\\mathbf{W}_{enc} \\mathbf{x} + \\mathbf{b}_{enc})",
+        "explanation": "Encoder maps high-dimensional input x to low-dimensional latent code z. The bottleneck (z has fewer dimensions than x) forces compression. Activation σ (ReLU, tanh) adds non-linearity, enabling learning of complex features beyond what PCA can capture.",
+        "variables": {
+          "x": "Input vector (e.g., 784-dim for MNIST)",
+          "z": "Latent code (e.g., 32-dim bottleneck)",
+          "W_enc, b_enc": "Encoder weights and biases",
+          "σ": "Activation function (ReLU, sigmoid, tanh)"
+        }
+      },
+      {
+        "name": "Decoding",
+        "latex": "\\hat{\\mathbf{x}} = g_{\\phi}(\\mathbf{z}) = \\sigma(\\mathbf{W}_{dec} \\mathbf{z} + \\mathbf{b}_{dec})",
+        "explanation": "Decoder reconstructs input from latent code. Output x̂ should match input x as closely as possible. Final activation matches input type: sigmoid for [0,1] images, tanh for [-1,1], linear for continuous data.",
+        "variables": {
+          "x̂": "Reconstructed output",
+          "z": "Latent code from encoder",
+          "W_dec, b_dec": "Decoder weights and biases"
+        }
+      },
+      {
+        "name": "Reconstruction Loss (MSE)",
+        "latex": "\\mathcal{L}_{MSE} = \\frac{1}{n} \\sum_{i=1}^{n} ||\\mathbf{x}_i - \\hat{\\mathbf{x}}_i||^2",
+        "explanation": "Mean Squared Error measures pixel-wise reconstruction quality. Works well for continuous data. Minimizing this loss forces encoder to preserve information needed for reconstruction.",
+        "variables": {
+          "n": "Number of samples",
+          "x_i": "Input sample",
+          "x̂_i": "Reconstructed sample"
+        }
+      },
+      {
+        "name": "Reconstruction Loss (BCE)",
+        "latex": "\\mathcal{L}_{BCE} = -\\frac{1}{n} \\sum_{i=1}^{n} [\\mathbf{x}_i \\log(\\hat{\\mathbf{x}}_i) + (1-\\mathbf{x}_i) \\log(1-\\hat{\\mathbf{x}}_i)]",
+        "explanation": "Binary Cross-Entropy for binary or [0,1] normalized images. Treats reconstruction as probabilistic prediction per pixel. Often works better than MSE for images.",
+        "variables": {
+          "x_i": "Input pixel value (0 to 1)",
+          "x̂_i": "Reconstructed probability (0 to 1)"
+        }
+      },
+      {
+        "name": "Total Loss with Regularization",
+        "latex": "\\mathcal{L} = \\mathcal{L}_{reconstruction} + \\lambda \\mathcal{L}_{regularization}",
+        "explanation": "Optional regularization encourages desired latent space properties. L1/L2 on z promotes sparsity. Contractive AE penalizes Jacobian. Sparse AE adds sparsity penalty.",
+        "variables": {
+          "λ": "Regularization strength",
+          "L_regularization": "Regularization term (L1, L2, sparsity, etc.)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Dimensionality Reduction",
+        "statement": "For linear encoder/decoder with MSE loss, the optimal solution learns the same subspace as PCA (first k principal components).",
+        "significance": "Deep non-linear autoencoders generalize PCA to non-linear manifolds, learning richer representations."
+      },
+      {
+        "name": "Universal Approximation",
+        "statement": "A sufficiently deep autoencoder can approximate any continuous function, thus can represent any data manifold.",
+        "significance": "Theoretical justification for using autoencoders for complex data. The bottleneck determines capacity."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass Autoencoder(nn.Module):\n    def __init__(self, input_dim=784, latent_dim=32):\n        super().__init__()\n        # Encoder\n        self.encoder = nn.Sequential(\n            nn.Linear(input_dim, 256),\n            nn.ReLU(),\n            nn.Linear(256, latent_dim),\n            nn.ReLU()\n        )\n        # Decoder\n        self.decoder = nn.Sequential(\n            nn.Linear(latent_dim, 256),\n            nn.ReLU(),\n            nn.Linear(256, input_dim),\n            nn.Sigmoid()  # Output in [0, 1]\n        )\n    \n    def forward(self, x):\n        z = self.encoder(x)\n        x_recon = self.decoder(z)\n        return x_recon\n    \n    def encode(self, x):\n        return self.encoder(x)\n\n# Training\nmodel = Autoencoder()\ncriterion = nn.MSELoss()  # or nn.BCELoss()\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-3)\n\nfor epoch in range(100):\n    for data in dataloader:\n        x = data[0].view(-1, 784)  # Flatten images\n        \n        # Forward pass\n        x_recon = model(x)\n        loss = criterion(x_recon, x)\n        \n        # Backward pass\n        optimizer.zero_grad()\n        loss.backward()\n        optimizer.step()\n    \n    print(f'Epoch {epoch}, Loss: {loss.item():.4f}')\n\nprint(f'Parameters: {sum(p.numel() for p in model.parameters()):,}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Dimensionality Reduction",
+      "application": "Feature extraction and visualization",
+      "description": "Compress high-dimensional data (images, text embeddings, sensor data) to 2D/3D for visualization or to lower dimensions for downstream tasks. Non-linear alternative to PCA.",
+      "realWorldExample": "UMAP and t-SNE use autoencoder-like ideas. Used in genomics to visualize thousands of gene expressions in 2D, revealing cell types and disease patterns."
+    },
+    {
+      "domain": "Anomaly Detection",
+      "application": "Fraud detection, defect detection, intrusion detection",
+      "description": "Train on normal data. Anomalies reconstruct poorly (high reconstruction error). Threshold reconstruction loss to detect outliers.",
+      "realWorldExample": "Credit card fraud detection (Stripe, PayPal): normal transactions reconstruct well, fraudulent ones have high error. Manufacturing: detect defective products on assembly lines."
+    },
+    {
+      "domain": "Image Denoising",
+      "application": "Noise removal from images, audio, sensor data",
+      "description": "Denoising Autoencoder: train with noisy input, clean output. Learns to remove noise while preserving signal. Better than traditional filters for complex noise.",
+      "realWorldExample": "Medical imaging (MRI, CT scans): remove noise while preserving diagnostic features. Nvidia's AI denoiser for ray-traced graphics uses autoencoder architecture."
+    },
+    {
+      "domain": "Pre-training",
+      "application": "Unsupervised pre-training for supervised tasks",
+      "description": "Pre-train encoder on unlabeled data via reconstruction. Use learned features for classification. Historical significance: sparked deep learning revival (2006).",
+      "realWorldExample": "Before ImageNet, autoencoders were used to pre-train CNNs. Less common now (replaced by self-supervised methods), but still used when labels scarce."
+    },
+    {
+      "domain": "Data Compression",
+      "application": "Lossy compression for images, video, audio",
+      "description": "Encoder compresses, decoder decompresses. Latent code is the compressed representation. Can outperform JPEG for specific domains.",
+      "realWorldExample": "Google's learned image compression uses variational autoencoders, achieving better quality than JPEG at same bit rate for photos."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MNIST (Reconstruction)",
+        "otherMetrics": {
+          "MSE": "~0.01-0.02",
+          "note": "32-dim latent, visually good reconstructions"
+        }
+      },
+      {
+        "name": "CIFAR-10 (Reconstruction)",
+        "otherMetrics": {
+          "MSE": "~0.03-0.05",
+          "note": "Harder than MNIST due to color and complexity"
+        }
+      },
+      {
+        "name": "Anomaly Detection (KDD Cup)",
+        "otherMetrics": {
+          "AUC": "~0.85-0.92",
+          "note": "Using reconstruction error for anomaly scoring"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Latent Dimension",
+        "recommendedValue": "2-512 depending on data complexity",
+        "rationale": "Too small: can't capture data, poor reconstruction. Too large: no compression, may overfit. MNIST: 8-32, ImageNet: 128-512."
+      },
+      {
+        "parameter": "Loss Function",
+        "recommendedValue": "MSE for continuous, BCE for binary/images",
+        "rationale": "MSE works for any data. BCE better for [0,1] images (treats as probabilities). Can combine: MSE + perceptual loss."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "1e-3 to 1e-4",
+        "rationale": "Adam with 1e-3 is a good start. Reduce if training unstable. Use LR scheduling for better convergence."
+      },
+      {
+        "parameter": "Batch Normalization",
+        "recommendedValue": "Often helps, but not always necessary",
+        "rationale": "Stabilizes training in deep autoencoders. Can slow convergence initially but improves final quality."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Blurry reconstructions",
+        "solution": "MSE loss averages over possible outputs, causing blur. Solutions: (1) Use BCE loss for images, (2) Add perceptual loss (compare features, not pixels), (3) Use adversarial loss (GAN-based), (4) Switch to VAE or other generative model."
+      },
+      {
+        "problem": "Mode collapse in latent space",
+        "solution": "All inputs map to same latent code. Causes: (1) Bottleneck too small, (2) Learning rate too high, (3) Insufficient data. Increase latent dim or add regularization."
+      },
+      {
+        "problem": "Posterior collapse (for VAE)",
+        "solution": "Decoder ignores latent code, generates same output for all z. Solutions: (1) Reduce β in β-VAE, (2) Use cyclical annealing of KL weight, (3) Add skip connections carefully."
+      }
+    ]
+  },
+  "comparisons": ["vae", "denoising-autoencoder", "sparse-autoencoder"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Learning Internal Representations by Error Propagation",
+      "url": "https://web.stanford.edu/class/psych209a/ReadingsByDate/02_06/PDPVolIChapter8.pdf",
+      "description": "Original 1986 work introducing autoencoders"
+    },
+    {
+      "type": "paper",
+      "title": "Reducing the Dimensionality of Data with Neural Networks",
+      "url": "https://www.science.org/doi/10.1126/science.1127647",
+      "description": "Hinton's 2006 paper that sparked deep learning revival using autoencoder pre-training"
+    },
+    {
+      "type": "blog",
+      "title": "Building Autoencoders in Keras",
+      "url": "https://blog.keras.io/building-autoencoders-in-keras.html",
+      "description": "Practical tutorial on implementing various autoencoder types"
+    }
+  ],
+  "tags": ["autoencoder", "unsupervised", "representation-learning", "dimensionality-reduction", "compression", "1986"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB (small models)",
+    "recommendedVRAM": "4 GB",
+    "trainingTime": {
+      "gpu": "5-10 minutes on MNIST, 1-2 hours on CIFAR-10"
+    },
+    "storageRequirements": "~2-10 MB for models"
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "id": "byol",
+  "name": "BYOL (Bootstrap Your Own Latent)",
+  "category": "self-supervised",
+  "description": "Self-supervised learning without negative samples. Uses a momentum encoder and predictor to learn representations by predicting augmented views, avoiding representation collapse through asymmetric architecture.",
+  "icon": "layers-2",
+  "yearIntroduced": 2020,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "BYOL Loss (Mean Squared Error)",
+        "latex": "\\mathcal{L}_\\theta = \\|\\bar{q}_\\theta(z_\\theta) - \\bar{z}'_{\\xi}\\|_2^2 = 2 - 2 \\cdot \\frac{\\langle q_\\theta(z_\\theta), z'_{\\xi} \\rangle}{\\|q_\\theta(z_\\theta)\\|_2 \\cdot \\|z'_{\\xi}\\|_2}",
+        "explanation": "THE MAGIC. No negatives needed! q_θ = predictor on online network. z'_ξ = target projection from momentum network. Bars = L2 normalization. Symmetrized loss: L_θ + L'_θ (swap augmented views). Why no collapse? Predictor + momentum encoder = asymmetry!",
+        "variables": {
+          "q_θ(z_θ)": "Predicted representation (online network)",
+          "z'_ξ": "Target projection (momentum network)",
+          "θ": "Online network parameters",
+          "ξ": "Momentum network parameters (EMA of θ)"
+        }
+      },
+      {
+        "name": "Momentum Update (Exponential Moving Average)",
+        "latex": "\\xi \\leftarrow \\tau \\xi + (1 - \\tau) \\theta",
+        "explanation": "Target network updated via EMA, NOT backprop. τ = momentum coefficient (0.99-0.999). Slow update stabilizes targets. ξ lags behind θ → prevents collapse. Cosine schedule: τ starts at 0.996 → 1.0 over training.",
+        "variables": {
+          "ξ": "Target network parameters (momentum encoder)",
+          "θ": "Online network parameters (updated by SGD)",
+          "τ": "Momentum coefficient (0.99-0.999)"
+        }
+      },
+      {
+        "name": "Online Network Forward Pass",
+        "latex": "y_\\theta = f_\\theta(\\tilde{x}), \\quad z_\\theta = g_\\theta(y_\\theta), \\quad q_\\theta(z_\\theta) = h_\\theta(z_\\theta)",
+        "explanation": "Online network: encoder f_θ → projector g_θ → predictor h_θ. y = representation (2048-d). z = projection (256-d). q = prediction (256-d). Only online has predictor! Asymmetry is key.",
+        "variables": {
+          "f_θ": "Online encoder (ResNet)",
+          "g_θ": "Online projector (MLP)",
+          "h_θ": "Online predictor (MLP) - UNIQUE TO ONLINE!",
+          "x̃": "Augmented view"
+        }
+      },
+      {
+        "name": "Target Network Forward Pass",
+        "latex": "y'_{\\xi} = f_{\\xi}(\\tilde{x}'), \\quad z'_{\\xi} = g_{\\xi}(y'_{\\xi})",
+        "explanation": "Target network: encoder f_ξ → projector g_ξ. NO predictor! Outputs z' used as target. Momentum network provides stable targets. Stop gradient: z'_ξ not used for backprop to ξ.",
+        "variables": {
+          "f_ξ": "Target encoder (momentum of f_θ)",
+          "g_ξ": "Target projector (momentum of g_θ)",
+          "x̃'": "Different augmented view",
+          "z'_ξ": "Target (stop gradient)"
+        }
+      },
+      {
+        "name": "Symmetrized Loss",
+        "latex": "\\mathcal{L}^{\\text{BYOL}} = \\mathcal{L}_\\theta(q_\\theta(z_\\theta), z'_{\\xi}) + \\mathcal{L}_\\theta(q_\\theta(z'_\\theta), z_{\\xi})",
+        "explanation": "Swap augmented views and compute loss both ways. First term: predict z' from z. Second term: predict z from z'. Symmetry improves stability and performance. Total loss is sum.",
+        "variables": {
+          "First term": "Predict target from online (view 1 → view 2)",
+          "Second term": "Predict target from online (view 2 → view 1)"
+        }
+      },
+      {
+        "name": "Collapse Prevention Mechanism",
+        "latex": "\\text{Asymmetry} = \\{\\text{predictor } h_\\theta, \\text{ momentum encoder } \\xi\\}",
+        "explanation": "Why no collapse? (1) Predictor h_θ only in online → prevents trivial solution. (2) Momentum encoder ξ → moving target. (3) Batch normalization in projector → implicit centering. Remove any → collapse! Empirically proven.",
+        "variables": {
+          "h_θ": "Predictor (breaks symmetry)",
+          "ξ": "Momentum parameters (moving target)",
+          "BatchNorm": "Implicit regularization"
+        }
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "# BYOL implementation\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nfrom torchvision.models import resnet50\nfrom copy import deepcopy\n\nclass MLP(nn.Module):\n    \"\"\"Projector and Predictor MLP.\"\"\"\n    def __init__(self, in_dim, hidden_dim=4096, out_dim=256):\n        super().__init__()\n        self.net = nn.Sequential(\n            nn.Linear(in_dim, hidden_dim),\n            nn.BatchNorm1d(hidden_dim),\n            nn.ReLU(inplace=True),\n            nn.Linear(hidden_dim, out_dim)\n        )\n    \n    def forward(self, x):\n        return self.net(x)\n\nclass BYOL(nn.Module):\n    def __init__(self, base_encoder=resnet50, projection_dim=256, hidden_dim=4096, tau=0.996):\n        super().__init__()\n        self.tau = tau\n        \n        # Online network\n        self.online_encoder = base_encoder(pretrained=False)\n        feature_dim = self.online_encoder.fc.in_features\n        self.online_encoder.fc = nn.Identity()\n        self.online_projector = MLP(feature_dim, hidden_dim, projection_dim)\n        self.online_predictor = MLP(projection_dim, hidden_dim, projection_dim)\n        \n        # Target network (momentum encoder)\n        self.target_encoder = deepcopy(self.online_encoder)\n        self.target_projector = deepcopy(self.online_projector)\n        \n        # Stop gradient on target\n        for param in self.target_encoder.parameters():\n            param.requires_grad = False\n        for param in self.target_projector.parameters():\n            param.requires_grad = False\n    \n    @torch.no_grad()\n    def update_target(self):\n        \"\"\"Momentum update: ξ ← τ*ξ + (1-τ)*θ.\"\"\"\n        for online_params, target_params in zip(\n            self.online_encoder.parameters(), self.target_encoder.parameters()\n        ):\n            target_params.data = self.tau * target_params.data + (1 - self.tau) * online_params.data\n        \n        for online_params, target_params in zip(\n            self.online_projector.parameters(), self.target_projector.parameters()\n        ):\n            target_params.data = self.tau * target_params.data + (1 - self.tau) * online_params.data\n    \n    def forward(self, x1, x2):\n        \"\"\"\n        Args:\n            x1, x2: Two augmented views (batch_size, 3, 224, 224)\n        Returns:\n            loss: BYOL loss (scalar)\n        \"\"\"\n        # Online network\n        y1 = self.online_encoder(x1)\n        z1 = self.online_projector(y1)\n        q1 = self.online_predictor(z1)\n        \n        y2 = self.online_encoder(x2)\n        z2 = self.online_projector(y2)\n        q2 = self.online_predictor(z2)\n        \n        # Target network (no gradient)\n        with torch.no_grad():\n            y1_target = self.target_encoder(x1)\n            z1_target = self.target_projector(y1_target)\n            \n            y2_target = self.target_encoder(x2)\n            z2_target = self.target_projector(y2_target)\n        \n        # Compute loss (symmetrized)\n        loss1 = self.regression_loss(q1, z2_target)\n        loss2 = self.regression_loss(q2, z1_target)\n        loss = loss1 + loss2\n        \n        return loss.mean()\n    \n    def regression_loss(self, q, z):\n        \"\"\"Mean squared error with L2 normalization.\"\"\"\n        q = F.normalize(q, dim=1)\n        z = F.normalize(z, dim=1)\n        return 2 - 2 * (q * z).sum(dim=1)\n\n# Training example\nmodel = BYOL(base_encoder=resnet50, projection_dim=256)\noptimizer = torch.optim.SGD(model.parameters(), lr=0.03)\n\nfor x1, x2 in dataloader:  # x1, x2 are augmented views\n    loss = model(x1, x2)\n    optimizer.zero_grad()\n    loss.backward()\n    optimizer.step()\n    model.update_target()  # Update momentum network\n\n# After training, use online_encoder for downstream tasks",
+    "keyComponents": ["Online network (encoder + projector + predictor)", "Target network (encoder + projector, no predictor)", "Momentum update (EMA)", "MSE loss with L2 normalization", "No negative samples!"]
+  },
+  "useCases": [
+    {"title": "ImageNet Linear Eval", "description": "74.3% top-1 accuracy (ResNet-50) without negative samples"},
+    {"title": "Transfer Learning", "description": "Strong performance on downstream tasks (detection, segmentation)"},
+    {"title": "Semi-Supervised Learning", "description": "Competitive with SimCLR using fewer computational resources"},
+    {"title": "No Large Batches", "description": "Works with smaller batch sizes (256-512) unlike SimCLR"}
+  ],
+  "benchmarks": {"ImageNet Top-1": "74.3% (linear eval, ResNet-50)", "Batch Size": "256-512 (vs SimCLR 4096)", "Training Time": "~300 epochs", "No Negatives": "Yes (unlike SimCLR, MoCo)"},
+  "trainingTips": [
+    {"tip": "Use momentum coefficient τ = 0.996-0.999 with cosine schedule", "reason": "Slow momentum update stabilizes targets. Cosine schedule: 0.996 → 1.0."},
+    {"tip": "Predictor is critical - removing it causes collapse", "reason": "Predictor breaks symmetry. Without it, network outputs constant."},
+    {"tip": "Batch size can be smaller (256-512)", "reason": "No negatives needed! More memory efficient than SimCLR."},
+    {"tip": "Use same augmentations as SimCLR", "reason": "Crop + color jitter + blur. Strong augmentation still important."},
+    {"tip": "Update target network after every optimizer step", "reason": "Frequent updates keep target network synchronized."}
+  ],
+  "comparisons": ["simclr", "moco", "resnet50"],
+  "resources": [
+    {"type": "paper", "title": "Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning", "url": "https://arxiv.org/abs/2006.07733", "description": "Original BYOL (Grill et al., 2020)"},
+    {"type": "paper", "title": "Understanding Self-Supervised Learning with Dual Deep Networks", "url": "https://arxiv.org/abs/2010.00578", "description": "Theoretical analysis of BYOL"}
+  ],
+  "tags": ["byol", "self-supervised", "momentum", "no-negatives", "2020"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {"minimumVRAM": "12 GB", "recommendedVRAM": "16 GB", "trainingTime": {"imagenet": "~300 epochs (~200 GPU-hours)"}, "typicalBatchSize": 512}
+}

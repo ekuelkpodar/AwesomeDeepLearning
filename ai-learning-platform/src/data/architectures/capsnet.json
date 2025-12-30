@@ -1,0 +1,55 @@
+{
+  "id": "capsnet",
+  "name": "Capsule Network",
+  "category": "hybrid",
+  "description": "Novel architecture using capsules (groups of neurons) to encode hierarchical part-whole relationships. Dynamic routing preserves spatial hierarchies and viewpoint equivariance.",
+  "icon": "layers",
+  "yearIntroduced": 2017,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Capsule Output (Squash Function)",
+        "latex": "\\mathbf{v}_j = \\frac{\\|\\mathbf{s}_j\\|^2}{1 + \\|\\mathbf{s}_j\\|^2} \\frac{\\mathbf{s}_j}{\\|\\mathbf{s}_j\\|}",
+        "explanation": "THE CORE. Squash = non-linear activation for vectors (not scalars!). s_j = weighted input, v_j = capsule output (vector). Length = probability entity exists. Direction = instantiation parameters (pose, position). ||v|| ∈ [0,1).",
+        "variables": {
+          "v_j": "Capsule output vector (encodes entity + properties)",
+          "s_j": "Total input to capsule j",
+          "||v||": "Vector length (probability entity present)"
+        }
+      },
+      {
+        "name": "Dynamic Routing (Agreement)",
+        "latex": "c_{ij} = \\frac{\\exp(b_{ij})}{\\sum_k \\exp(b_{ik})}, \\quad b_{ij} \\leftarrow b_{ij} + \\hat{\\mathbf{u}}_{j|i} \\cdot \\mathbf{v}_j",
+        "explanation": "Iterative routing (3-5 iterations). b_ij = logits (coupling coefficients). c_ij = routing weights (softmax). Update: b += agreement (dot product). High agreement → route more activation. Self-organizing!",
+        "variables": {
+          "c_ij": "Routing coefficient (softmax over outputs)",
+          "b_ij": "Log prior probability (updated iteratively)",
+          "û_j|i": "Prediction from capsule i to j",
+          "v_j": "Capsule j output"
+        }
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "# CapsNet implementation with dynamic routing\nclass CapsuleLayer(nn.Module):\n    def __init__(self, num_capsules=10, num_routes=1152, in_channels=8, out_channels=16):\n        super().__init__()\n        self.num_routes = num_routes\n        self.num_capsules = num_capsules\n        self.W = nn.Parameter(torch.randn(num_capsules, num_routes, out_channels, in_channels))\n    \n    def squash(self, s):\n        norm = torch.norm(s, dim=-1, keepdim=True)\n        return (norm**2 / (1 + norm**2)) * s / (norm + 1e-8)\n    \n    def forward(self, u, num_iterations=3):\n        # u: (batch, num_routes, in_channels)\n        batch_size = u.size(0)\n        u = u.unsqueeze(1).unsqueeze(3)  # (batch, 1, num_routes, 1, in_channels)\n        u_hat = torch.matmul(self.W, u).squeeze(-1)  # Predictions\n        \n        b = torch.zeros(batch_size, self.num_capsules, self.num_routes).to(u.device)\n        \n        for iteration in range(num_iterations):\n            c = F.softmax(b, dim=1)  # Routing weights\n            s = (c.unsqueeze(-1) * u_hat).sum(dim=2)  # Weighted sum\n            v = self.squash(s)  # Squash\n            \n            if iteration < num_iterations - 1:\n                agreement = (u_hat * v.unsqueeze(2)).sum(dim=-1)\n                b = b + agreement  # Update logits\n        \n        return v  # (batch, num_capsules, out_channels)",
+    "keyComponents": ["Capsules (vector outputs)", "Dynamic routing by agreement", "Squash activation", "Part-whole hierarchies"]
+  },
+  "useCases": [
+    {"title": "MNIST", "description": "99.75% accuracy with reconstruction, fewer parameters than CNN"},
+    {"title": "Object Segmentation", "description": "Preserves spatial hierarchies for segmentation"},
+    {"title": "Viewpoint Equivariance", "description": "Generalizes across viewpoints (rotation, translation)"}
+  ],
+  "benchmarks": {"MNIST": "99.75%", "CIFAR-10": "~89% (lower than CNNs)", "Parameters": "Fewer than ResNet for MNIST"},
+  "trainingTips": [
+    {"tip": "Use 3 routing iterations for efficiency", "reason": "More iterations = diminishing returns. 3 is sweet spot."},
+    {"tip": "Add reconstruction loss (decoder) for regularization", "reason": "Reconstruction encourages meaningful capsule activations."}
+  ],
+  "comparisons": ["cnn", "resnet"],
+  "resources": [
+    {"type": "paper", "title": "Dynamic Routing Between Capsules", "url": "https://arxiv.org/abs/1710.09829", "description": "Original CapsNet (Hinton et al., 2017)"}
+  ],
+  "tags": ["capsnet", "routing", "equivariance", "hierarchical", "2017"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {"minimumVRAM": "6 GB", "recommendedVRAM": "8 GB", "trainingTime": {"mnist": "1-2 hours on GPU"}, "typicalBatchSize": 128}
+}

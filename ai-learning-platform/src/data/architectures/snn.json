@@ -1,0 +1,205 @@
+{
+  "id": "snn",
+  "name": "Spiking Neural Network",
+  "category": "spiking",
+  "description": "Bio-inspired neural networks that communicate via discrete spikes (action potentials) rather than continuous activations. Process spatiotemporal patterns with extreme energy efficiency.",
+  "icon": "activity",
+  "yearIntroduced": 1997,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Spike Train (Event-Based Representation)",
+        "latex": "s(t) = \\sum_{f=1}^{n} \\delta(t - t^{(f)})",
+        "explanation": "THE CORE. Spike train = sequence of discrete events (action potentials). δ(t - t^f) is Dirac delta at spike time t^f. No continuous values—just binary events! Energy-efficient: communicate only when necessary.",
+        "variables": {
+          "s(t)": "Spike train over time",
+          "t^(f)": "Time of f-th spike",
+          "δ": "Dirac delta function",
+          "n": "Total number of spikes"
+        }
+      },
+      {
+        "name": "Leaky Integrate-and-Fire (LIF) Membrane Potential",
+        "latex": "\\tau_m \\frac{dv}{dt} = -(v - v_{rest}) + R I_{syn}(t)",
+        "explanation": "Neuron membrane dynamics. v = membrane potential, leaks toward v_rest with time constant τ_m. I_syn = synaptic current from incoming spikes. When v ≥ v_thresh, neuron fires and resets to v_reset.",
+        "variables": {
+          "v": "Membrane potential (voltage)",
+          "τ_m": "Membrane time constant (typically 10-20ms)",
+          "v_rest": "Resting potential (-70mV)",
+          "R": "Membrane resistance",
+          "I_syn": "Synaptic input current"
+        }
+      },
+      {
+        "name": "Synaptic Current (Post-Synaptic Potential)",
+        "latex": "I_{syn}(t) = \\sum_j w_j \\sum_f \\alpha(t - t_j^{(f)})",
+        "explanation": "Incoming spikes → current injection. w_j = synaptic weight from neuron j. α(t) = PSP kernel (exponential or alpha function). Sum over all presynaptic neurons j and their spike times.",
+        "variables": {
+          "w_j": "Synaptic weight from neuron j",
+          "t_j^(f)": "Spike time of neuron j",
+          "α(t)": "Post-synaptic potential kernel (e^(-t/τ))"
+        }
+      },
+      {
+        "name": "Spike-Timing-Dependent Plasticity (STDP)",
+        "latex": "\\Delta w = \\begin{cases} A_+ e^{-\\Delta t / \\tau_+} & \\text{if } \\Delta t > 0 \\\\ -A_- e^{\\Delta t / \\tau_-} & \\text{if } \\Delta t < 0 \\end{cases}",
+        "explanation": "Hebbian learning with causality. Δt = t_post - t_pre (spike time difference). If pre fires before post (Δt > 0): potentiate (strengthen). If post fires before pre (Δt < 0): depress (weaken). 'Neurons that fire together, wire together'—but timing matters!",
+        "variables": {
+          "Δw": "Weight change",
+          "Δt": "Spike time difference (post - pre)",
+          "A_+, A_-": "Learning rate (potentiation, depression)",
+          "τ_+, τ_-": "Time constants (typically 20ms)"
+        }
+      },
+      {
+        "name": "Surrogate Gradient (Backprop Through Time)",
+        "latex": "\\frac{\\partial s}{\\partial v} \\approx \\sigma'(\\beta(v - v_{thresh})) \\quad \\text{where } s = \\Theta(v - v_{thresh})",
+        "explanation": "Spike function Θ (Heaviside) is non-differentiable! Use surrogate gradient: sigmoid derivative σ'(β·x). β controls slope steepness. Enables backprop-based training (gradient descent) despite discrete spikes.",
+        "variables": {
+          "s": "Spike output (0 or 1)",
+          "v": "Membrane potential",
+          "Θ": "Heaviside step function",
+          "σ'": "Surrogate gradient (sigmoid derivative)",
+          "β": "Slope parameter (typically 10-100)"
+        }
+      },
+      {
+        "name": "Energy Consumption (Event-Driven)",
+        "latex": "E = n_{spikes} \\cdot E_{spike} + E_{leak}",
+        "explanation": "Energy ∝ number of spikes! Each spike costs E_spike (synaptic transmission + axonal propagation ≈ 1-10 pJ/spike). Leak energy E_leak (static power, minimal). Contrast: ANNs compute every timestep. SNNs: sparse, event-driven → 1000× energy savings.",
+        "variables": {
+          "n_spikes": "Total spike count",
+          "E_spike": "Energy per spike (pJ)",
+          "E_leak": "Leakage energy (static power)"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "Feedforward SNN",
+        "description": "Input spikes → hidden layers → output spikes. Rate coding (spike count) or temporal coding (spike timing)."
+      },
+      {
+        "name": "Recurrent SNN (Reservoir)",
+        "description": "Liquid State Machine: random recurrent connections, learn only readout. Temporal processing without backprop."
+      },
+      {
+        "name": "Convolutional SNN",
+        "description": "Event-based vision (DVS camera). Spike convolutions for spatiotemporal feature extraction."
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch + snnTorch",
+    "implementation": "import torch\nimport torch.nn as nn\nimport snntorch as snn\nfrom snntorch import surrogate\n\nclass SpikingNeuralNetwork(nn.Module):\n    def __init__(self, input_size=784, hidden_size=128, output_size=10, \n                 beta=0.95, num_steps=100):\n        \"\"\"\n        Args:\n            beta: Membrane potential decay rate (0.9-0.99, higher = longer memory)\n            num_steps: Simulation time steps (spike train length)\n        \"\"\"\n        super().__init__()\n        self.num_steps = num_steps\n        \n        # Synaptic layers (weights)\n        self.fc1 = nn.Linear(input_size, hidden_size)\n        self.fc2 = nn.Linear(hidden_size, output_size)\n        \n        # LIF neurons with surrogate gradient\n        spike_grad = surrogate.fast_sigmoid(slope=25)  # Surrogate for backprop\n        self.lif1 = snn.Leaky(beta=beta, spike_grad=spike_grad)\n        self.lif2 = snn.Leaky(beta=beta, spike_grad=spike_grad)\n    \n    def forward(self, x):\n        \"\"\"\n        x: (batch, input_size) - static input (convert to spike train)\n        Returns: spike_output (num_steps, batch, output_size)\n        \"\"\"\n        batch_size = x.size(0)\n        \n        # Initialize membrane potentials\n        mem1 = self.lif1.init_leaky()\n        mem2 = self.lif2.init_leaky()\n        \n        # Record output spikes over time\n        spike_outputs = []\n        \n        # Simulate over time\n        for step in range(self.num_steps):\n            # Input encoding: rate coding (Poisson spikes proportional to x)\n            spike_input = torch.rand_like(x) < x  # Bernoulli sampling\n            \n            # Layer 1: synaptic current + LIF dynamics\n            cur1 = self.fc1(spike_input.float())\n            spike1, mem1 = self.lif1(cur1, mem1)\n            \n            # Layer 2\n            cur2 = self.fc2(spike1)\n            spike2, mem2 = self.lif2(cur2, mem2)\n            \n            spike_outputs.append(spike2)\n        \n        # Stack: (num_steps, batch, output_size)\n        return torch.stack(spike_outputs, dim=0)\n\n# Training with surrogate gradient descent\nmodel = SpikingNeuralNetwork(input_size=784, hidden_size=128, output_size=10, \n                             beta=0.95, num_steps=100)\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-3)\nloss_fn = nn.CrossEntropyLoss()\n\nfor epoch in range(10):\n    for x_batch, y_batch in train_loader:  # MNIST\n        x_batch = x_batch.view(x_batch.size(0), -1)  # Flatten\n        \n        # Normalize to [0, 1] for Poisson encoding\n        x_batch = x_batch / x_batch.max()\n        \n        # Forward: get spike trains (T, batch, num_classes)\n        spike_output = model(x_batch)\n        \n        # Decode: sum spikes over time (rate coding)\n        spike_count = spike_output.sum(dim=0)  # (batch, num_classes)\n        \n        # Loss and backprop\n        loss = loss_fn(spike_count, y_batch)\n        optimizer.zero_grad()\n        loss.backward()  # Surrogate gradient through spikes!\n        optimizer.step()\n    \n    print(f'Epoch {epoch}, Loss: {loss.item():.4f}')\n\n# Inference: count spikes to classify\nwith torch.no_grad():\n    spike_output = model(x_test)\n    spike_count = spike_output.sum(dim=0)\n    predictions = spike_count.argmax(dim=1)\n    accuracy = (predictions == y_test).float().mean()\n    print(f'Test Accuracy: {accuracy:.2%}')\n    \n    # Energy estimation: count total spikes\n    total_spikes = spike_output.sum().item()\n    energy_pJ = total_spikes * 5  # Assume 5 pJ/spike\n    print(f'Energy: {energy_pJ:.2f} pJ ({total_spikes} spikes)')",
+    "keyComponents": [
+      "LIF neurons (leaky integrate-and-fire)",
+      "Surrogate gradients for backprop",
+      "Spike train simulation over time",
+      "Rate or temporal coding",
+      "Event-driven computation"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Event-Based Vision (DVS Cameras)",
+      "description": "Dynamic Vision Sensors (DVS) output spikes on per-pixel brightness changes (not frames!). SNNs process asynchronous events directly. Applications: high-speed object tracking (1000+ fps), low-light vision, robotic navigation.",
+      "example": "DAVIS camera + SNN: 10,000 fps object detection at 10mW power"
+    },
+    {
+      "title": "Ultra-Low-Power Edge AI",
+      "description": "Neuromorphic chips (Intel Loihi, IBM TrueNorth, SpiNNaker) run SNNs at 1000× lower energy than GPUs. Deploy on battery-powered IoT devices for always-on inference (keyword spotting, anomaly detection).",
+      "example": "Loihi: MNIST classification at 30μJ per inference (vs 30mJ on GPU)"
+    },
+    {
+      "title": "Temporal Pattern Recognition",
+      "description": "Speech, EEG, time-series. SNNs exploit spike timing for temporal credit assignment. Reservoir computing (Liquid State Machines) processes sequences without training recurrent weights.",
+      "example": "Speech recognition: 95% accuracy on TI46 with 100× fewer operations"
+    },
+    {
+      "title": "Robotic Control & Sensorimotor Learning",
+      "description": "Bio-inspired control loops. STDP enables unsupervised learning of sensorimotor mappings. Real-time closed-loop control with sub-millisecond latency on neuromorphic hardware.",
+      "example": "SpiNNaker robot: obstacle avoidance with 1ms reaction time, 1W power"
+    }
+  ],
+  "benchmarks": {
+    "MNIST (Rate Coding)": "99.4% accuracy (comparable to ANNs)",
+    "DVS Gesture Recognition": "96.8% accuracy (IBM DVS128 Gesture)",
+    "Energy Efficiency (Loihi)": "1000× lower than GPU (30μJ vs 30mJ per inference)",
+    "Latency": "Sub-millisecond inference on neuromorphic chips",
+    "Training Time": "Slower than ANNs (temporal simulation overhead)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Use surrogate gradients (fast sigmoid, arctan) with slope β=25-100 for stable backprop",
+      "reason": "Spike function is non-differentiable. Surrogate gradient approximates derivative. Higher β = sharper approximation but noisier gradients."
+    },
+    {
+      "tip": "Normalize inputs to [0, 1] for Poisson rate coding. Higher intensity = more spikes.",
+      "reason": "Rate coding: spike frequency encodes information. Input normalization ensures consistent spike rates across samples."
+    },
+    {
+      "tip": "Use β=0.9-0.99 (membrane decay). Higher β = longer temporal memory (better for sequences).",
+      "reason": "β controls leak timescale. Low β = fast leak (forgets quickly). High β = slow leak (integrates over time)."
+    },
+    {
+      "tip": "Start with num_steps=25-100. Longer = more accurate but slower training. Use temporal batching.",
+      "reason": "Temporal simulation is expensive. 100 timesteps = 100× forward passes. Reduce for faster experimentation."
+    },
+    {
+      "tip": "For STDP: unsupervised pre-training, then supervised fine-tuning with backprop",
+      "reason": "STDP learns features without labels (like PCA). Combine with gradient descent for classification head."
+    }
+  ],
+  "comparisons": ["lstm", "transformer", "cnn"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Spiking Neural Networks: A Survey",
+      "url": "https://arxiv.org/abs/1804.08150",
+      "description": "Comprehensive SNN review (2018)"
+    },
+    {
+      "type": "paper",
+      "title": "Surrogate Gradient Learning in Spiking Neural Networks",
+      "url": "https://arxiv.org/abs/1901.09948",
+      "description": "Enables gradient-based training (Neftci et al. 2019)"
+    },
+    {
+      "type": "code",
+      "title": "snnTorch: PyTorch SNN Library",
+      "url": "https://github.com/jeshraghian/snntorch",
+      "description": "Easy-to-use Python library for SNNs with tutorials"
+    },
+    {
+      "type": "tutorial",
+      "title": "snnTorch Tutorial Series",
+      "url": "https://snntorch.readthedocs.io/",
+      "description": "Interactive Jupyter notebooks on SNNs"
+    },
+    {
+      "type": "paper",
+      "title": "Intel Loihi Neuromorphic Chip",
+      "url": "https://arxiv.org/abs/1805.09962",
+      "description": "Neuromorphic hardware with on-chip STDP (2018)"
+    },
+    {
+      "type": "blog",
+      "title": "Neuromorphic Computing: Why Now?",
+      "url": "https://www.intel.com/content/www/us/en/research/neuromorphic-computing.html",
+      "description": "Intel's vision for brain-inspired computing"
+    }
+  ],
+  "tags": ["snn", "spiking", "neuromorphic", "event-driven", "energy-efficient", "bio-inspired", "1997"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (simulation on GPU)",
+    "recommendedVRAM": "8 GB",
+    "trainingTime": {
+      "mnist": "30-60 min on GPU (100 timesteps)",
+      "dvs_gesture": "2-4 hours on GPU"
+    },
+    "typicalBatchSize": 32,
+    "notes": "Temporal simulation (100 timesteps) = 100× forward passes. Neuromorphic chips (Loihi) run SNNs 1000× more efficiently than GPUs."
+  }
+}

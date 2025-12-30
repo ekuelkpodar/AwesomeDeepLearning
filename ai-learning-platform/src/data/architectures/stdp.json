@@ -1,0 +1,201 @@
+{
+  "id": "stdp",
+  "name": "Spike-Timing-Dependent Plasticity",
+  "category": "spiking",
+  "description": "Unsupervised Hebbian learning rule where synaptic strength changes based on precise spike timing. 'Neurons that fire together, wire together'—but causality matters. Foundation of biological learning.",
+  "icon": "brain-circuit",
+  "yearIntroduced": 1997,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "STDP Learning Rule (Asymmetric Window)",
+        "latex": "\\Delta w = \\begin{cases} A_+ e^{-\\Delta t / \\tau_+} & \\text{if } \\Delta t > 0 \\text{ (LTP)} \\\\ -A_- e^{\\Delta t / \\tau_-} & \\text{if } \\Delta t < 0 \\text{ (LTD)} \\end{cases}",
+        "explanation": "THE CORE. Δt = t_post - t_pre (spike time difference). Pre→Post (Δt>0): Long-Term Potentiation (LTP, strengthen). Post→Pre (Δt<0): Long-Term Depression (LTD, weaken). Exponential window: nearby spikes matter most (τ_+ ≈ τ_- ≈ 20ms).",
+        "variables": {
+          "Δw": "Weight change (potentiation or depression)",
+          "Δt": "t_post - t_pre (ms)",
+          "A_+": "LTP amplitude (typically 0.005)",
+          "A_-": "LTD amplitude (typically 0.00525, slightly > A_+)",
+          "τ_+, τ_-": "Time constants (~20ms)"
+        }
+      },
+      {
+        "name": "Additive STDP (Weight Update)",
+        "latex": "w(t+1) = w(t) + \\eta \\cdot \\Delta w",
+        "explanation": "Simple additive update. η = learning rate. Issue: weights unbounded → need weight normalization or soft bounds. Used in theoretical models.",
+        "variables": {
+          "η": "Learning rate (0.001-0.01)",
+          "w(t)": "Synaptic weight at time t"
+        }
+      },
+      {
+        "name": "Multiplicative STDP (Soft Bounds)",
+        "latex": "\\Delta w = \\begin{cases} A_+ (w_{max} - w) e^{-\\Delta t / \\tau_+} & \\text{if } \\Delta t > 0 \\\\ -A_- w \\, e^{\\Delta t / \\tau_-} & \\text{if } \\Delta t < 0 \\end{cases}",
+        "explanation": "Weight-dependent plasticity. LTP saturates at w_max (depression-resistant when w high). LTD proportional to w (weak synapses hard to depress further). Self-stabilizing → competitive learning.",
+        "variables": {
+          "w_max": "Maximum weight (typically 1.0)",
+          "w": "Current weight",
+          "(w_max - w)": "LTP decreases as w → w_max",
+          "w · ...": "LTD proportional to current weight"
+        }
+      },
+      {
+        "name": "Triplet STDP (Beyond Pairwise)",
+        "latex": "\\Delta w = A_2^+ \\cdot r_1(t_{pre}) \\cdot o_1(t_{post}) + A_3^+ \\cdot r_1(t_{pre}) \\cdot o_2(t_{post})",
+        "explanation": "Accounts for spike triplets and higher-order correlations. r_1, r_2 = traces of presynaptic spikes. o_1, o_2 = traces of postsynaptic spikes. Explains frequency dependence and non-linear effects in experiments.",
+        "variables": {
+          "r_1, r_2": "Presynaptic spike traces (different timescales)",
+          "o_1, o_2": "Postsynaptic spike traces",
+          "A_2, A_3": "Pair and triplet LTP amplitudes"
+        }
+      },
+      {
+        "name": "Homeostatic Plasticity (Target Firing Rate)",
+        "latex": "\\Delta w_{homeo} = \\eta_{homeo} (\\rho_{target} - \\rho_{actual})",
+        "explanation": "Stabilize network activity. STDP alone → runaway excitation or silence. Homeostasis adjusts all weights to maintain target firing rate ρ_target. Slow timescale (minutes-hours) vs STDP (seconds).",
+        "variables": {
+          "ρ_target": "Target firing rate (e.g., 5 Hz)",
+          "ρ_actual": "Actual firing rate",
+          "η_homeo": "Homeostatic learning rate (slow)"
+        }
+      },
+      {
+        "name": "BCM Rule (Bienenstock-Cooper-Munro)",
+        "latex": "\\Delta w \\propto \\phi(\\rho_{post}) \\cdot \\rho_{pre}, \\quad \\phi(\\rho) = \\rho (\\rho - \\theta_m)",
+        "explanation": "Rate-based approximation of STDP. θ_m = sliding threshold (depends on past activity). Low post-rate → LTD. High post-rate → LTP. Explains competitive learning (Hebbian + homeostasis).",
+        "variables": {
+          "ρ_post": "Postsynaptic firing rate",
+          "ρ_pre": "Presynaptic firing rate",
+          "θ_m": "Modification threshold (adaptive)",
+          "φ": "BCM nonlinearity (quadratic)"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "Unsupervised Feature Learning",
+        "description": "STDP layer extracts spatiotemporal features from spike trains (like unsupervised convolutional filters). Followed by supervised readout."
+      },
+      {
+        "name": "Reservoir Computing (LSM + STDP)",
+        "description": "Liquid State Machine with STDP plasticity in recurrent reservoir. Learn temporal kernels without backprop."
+      },
+      {
+        "name": "Winner-Take-All (Competitive Learning)",
+        "description": "STDP + lateral inhibition → neurons specialize. Each neuron learns different feature. Used in neuromorphic vision."
+      }
+    ]
+  },
+  "code": {
+    "framework": "Python (NumPy)",
+    "implementation": "import numpy as np\n\nclass STDPSynapse:\n    def __init__(self, A_plus=0.005, A_minus=0.00525, tau_plus=20.0, tau_minus=20.0, \n                 w_min=0.0, w_max=1.0, mode='additive'):\n        \"\"\"\n        STDP learning rule.\n        \n        Args:\n            A_plus: LTP amplitude\n            A_minus: LTD amplitude (typically > A_plus for balance)\n            tau_plus: LTP time constant (ms)\n            tau_minus: LTD time constant (ms)\n            w_min, w_max: Weight bounds\n            mode: 'additive' or 'multiplicative'\n        \"\"\"\n        self.A_plus = A_plus\n        self.A_minus = A_minus\n        self.tau_plus = tau_plus\n        self.tau_minus = tau_minus\n        self.w_min = w_min\n        self.w_max = w_max\n        self.mode = mode\n        \n        # Synaptic weight\n        self.w = np.random.uniform(w_min, w_max)\n        \n        # Spike traces (for efficient implementation)\n        self.pre_trace = 0.0  # Presynaptic eligibility trace\n        self.post_trace = 0.0  # Postsynaptic eligibility trace\n    \n    def update_traces(self, dt=0.1, tau_trace=20.0):\n        \"\"\"Decay eligibility traces exponentially.\"\"\"\n        decay = np.exp(-dt / tau_trace)\n        self.pre_trace *= decay\n        self.post_trace *= decay\n    \n    def pre_spike(self):\n        \"\"\"Presynaptic neuron fires.\"\"\"\n        # LTD: postsynaptic trace tells us recent post spikes\n        if self.mode == 'additive':\n            dw = -self.A_minus * self.post_trace\n        else:  # multiplicative\n            dw = -self.A_minus * self.w * self.post_trace\n        \n        self.w += dw\n        self.w = np.clip(self.w, self.w_min, self.w_max)\n        \n        # Increment presynaptic trace\n        self.pre_trace += 1.0\n    \n    def post_spike(self):\n        \"\"\"Postsynaptic neuron fires.\"\"\"\n        # LTP: presynaptic trace tells us recent pre spikes\n        if self.mode == 'additive':\n            dw = self.A_plus * self.pre_trace\n        else:  # multiplicative\n            dw = self.A_plus * (self.w_max - self.w) * self.pre_trace\n        \n        self.w += dw\n        self.w = np.clip(self.w, self.w_min, self.w_max)\n        \n        # Increment postsynaptic trace\n        self.post_trace += 1.0\n    \n    def get_weight(self):\n        return self.w\n\n# Example: STDP learning with spike pairs\nsynapse = STDPSynapse(A_plus=0.005, A_minus=0.00525, mode='multiplicative')\n\n# Simulate spike pairs with varying Δt\ndt_values = np.linspace(-50, 50, 100)  # Δt from -50ms to +50ms\nweight_changes = []\n\nfor dt in dt_values:\n    # Reset synapse\n    syn = STDPSynapse(A_plus=0.005, A_minus=0.00525, mode='additive')\n    syn.w = 0.5  # Start at mid-weight\n    \n    if dt > 0:\n        # Pre before post (LTP)\n        syn.pre_spike()\n        syn.update_traces(dt=dt)  # Wait Δt\n        syn.post_spike()\n    else:\n        # Post before pre (LTD)\n        syn.post_spike()\n        syn.update_traces(dt=abs(dt))  # Wait |Δt|\n        syn.pre_spike()\n    \n    weight_changes.append(syn.w - 0.5)  # Change from initial\n\nimport matplotlib.pyplot as plt\n\nplt.figure(figsize=(10, 6))\nplt.plot(dt_values, weight_changes, 'b-', linewidth=2)\nplt.axhline(y=0, color='gray', linestyle='--')\nplt.axvline(x=0, color='gray', linestyle='--')\nplt.xlabel('Δt = t_post - t_pre (ms)', fontsize=12)\nplt.ylabel('Weight Change Δw', fontsize=12)\nplt.title('STDP Learning Window (Asymmetric Hebbian)', fontsize=14)\nplt.grid(True, alpha=0.3)\nplt.text(20, max(weight_changes)*0.8, 'LTP\\n(Pre→Post)', ha='center', fontsize=11)\nplt.text(-20, min(weight_changes)*0.8, 'LTD\\n(Post→Pre)', ha='center', fontsize=11)\nplt.tight_layout()\nplt.savefig('stdp_window.png', dpi=150)\n\n# Example 2: Competitive learning with STDP\nclass CompetitiveSTDPLayer:\n    def __init__(self, n_inputs=100, n_neurons=10):\n        \"\"\"Layer of neurons with STDP + lateral inhibition.\"\"\"\n        self.n_inputs = n_inputs\n        self.n_neurons = n_neurons\n        \n        # Synapses: (n_neurons, n_inputs)\n        self.synapses = [[STDPSynapse(mode='multiplicative') \n                         for _ in range(n_inputs)] \n                        for _ in range(n_neurons)]\n    \n    def forward(self, input_spikes):\n        \"\"\"Winner-take-all with STDP learning.\"\"\"\n        # Compute weighted inputs\n        activations = np.zeros(self.n_neurons)\n        for i in range(self.n_neurons):\n            for j in range(self.n_inputs):\n                if input_spikes[j]:\n                    activations[i] += self.synapses[i][j].get_weight()\n        \n        # Winner takes all (lateral inhibition)\n        winner = np.argmax(activations)\n        \n        # Update STDP: only winner neuron learns\n        for j in range(self.n_inputs):\n            if input_spikes[j]:\n                self.synapses[winner][j].pre_spike()\n        \n        self.synapses[winner][0].post_spike()  # Simplified: mark winner fired\n        \n        return winner\n\nprint('STDP: Unsupervised Hebbian learning with spike timing!')",
+    "keyComponents": [
+      "Asymmetric learning window (LTP vs LTD)",
+      "Eligibility traces (efficient implementation)",
+      "Multiplicative bounds (self-stabilizing)",
+      "Competitive learning (winner-take-all)"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Unsupervised Feature Learning (Neuromorphic Vision)",
+      "description": "STDP layers learn edge detectors, motion detectors from DVS camera streams. No labels needed! Similar to Hebbian learning in V1 (primary visual cortex). Deploy on Loihi for real-time learning.",
+      "example": "DVS gesture recognition: STDP pre-training + supervised readout (96% accuracy)"
+    },
+    {
+      "title": "Temporal Sequence Learning",
+      "description": "STDP captures causal temporal structure. Learn predictive codes (spike at t → spike at t+Δt). Applications: time-series forecasting, motor control, speech.",
+      "example": "Polychronization: STDP creates synfire chains (Izhikevich 2006)"
+    },
+    {
+      "title": "Neuromorphic Audio (Cochlea Models)",
+      "description": "Silicon cochlea outputs spike trains. STDP learns frequency-selective receptive fields (like inferior colliculus). Ultra-low-power keyword spotting.",
+      "example": "STDP-based keyword spotting: 50μW power, 90% accuracy (12 keywords)"
+    },
+    {
+      "title": "Biologically Plausible Learning (Neuroscience Models)",
+      "description": "Model synaptic plasticity in cortex, hippocampus. STDP explains: orientation selectivity (V1), place cells (hippocampus), reward learning (dopamine modulation of STDP).",
+      "example": "Song & Abbott (2001): STDP + lateral inhibition → orientation tuning"
+    }
+  ],
+  "benchmarks": {
+    "MNIST (STDP + readout)": "95% accuracy (unsupervised STDP features + linear classifier)",
+    "DVS Gesture": "96% (10-class gesture recognition)",
+    "Learning Speed": "Online, single-pass (no epochs needed)",
+    "Biological Plausibility": "High (observed in cortex, hippocampus)",
+    "Computational Cost": "O(spikes) per synapse (event-driven)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Set A_- slightly > A_+ (e.g., 1.05×) to prevent runaway potentiation",
+      "reason": "LTD must balance LTP on average. Imbalance → all weights saturate at w_max or w_min."
+    },
+    {
+      "tip": "Use multiplicative STDP for competitive learning (winner-take-all). Additive for small networks.",
+      "reason": "Multiplicative self-stabilizes. Additive needs explicit weight normalization."
+    },
+    {
+      "tip": "Combine STDP with homeostatic plasticity (target firing rate) for stability",
+      "reason": "STDP alone can destabilize. Homeostasis prevents runaway excitation or quiescence."
+    },
+    {
+      "tip": "Implement with eligibility traces (exponential decay) for efficiency—don't store all spike times!",
+      "reason": "Exact STDP: O(n_pre × n_post spikes). Traces: O(synapses), much faster."
+    },
+    {
+      "tip": "For supervised tasks: STDP pre-training (features) + gradient descent (readout)",
+      "reason": "STDP extracts features, but classification needs supervision. Hybrid approach works best."
+    }
+  ],
+  "comparisons": ["snn", "lif", "hebbian-learning"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Spike-Timing-Dependent Plasticity: A Hebbian Learning Rule",
+      "url": "https://www.annualreviews.org/doi/10.1146/annurev.neuro.31.060407.125639",
+      "description": "Dan & Poo review (Annual Reviews, 2004)"
+    },
+    {
+      "type": "paper",
+      "title": "Competitive Hebbian Learning Through STDP",
+      "url": "https://www.nature.com/articles/35004588",
+      "description": "Song, Miller & Abbott (Nature Neuroscience, 2000)"
+    },
+    {
+      "type": "paper",
+      "title": "Triplet-Based STDP Models",
+      "url": "https://www.jneurosci.org/content/31/25/9352",
+      "description": "Beyond pairwise: Pfister & Gerstner (2006)"
+    },
+    {
+      "type": "tutorial",
+      "title": "Brian2 STDP Tutorial",
+      "url": "https://brian2.readthedocs.io/en/stable/examples/synapses.STDP.html",
+      "description": "Hands-on Python simulation"
+    },
+    {
+      "type": "code",
+      "title": "BindsNET: STDP in PyTorch",
+      "url": "https://github.com/BindsNET/bindsnet",
+      "description": "SNN library with STDP learning rules"
+    },
+    {
+      "type": "paper",
+      "title": "STDP on Neuromorphic Hardware (Loihi)",
+      "url": "https://arxiv.org/abs/2003.01651",
+      "description": "On-chip STDP learning (Davies et al.)"
+    }
+  ],
+  "tags": ["stdp", "hebbian", "plasticity", "unsupervised", "spiking", "neuromorphic", "1997"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "N/A (CPU-based, event-driven)",
+    "recommendedVRAM": "4 GB (for large-scale SNN simulation)",
+    "trainingTime": {
+      "mnist": "10-30 min (unsupervised STDP feature learning)",
+      "online": "Single-pass, no epochs (continual learning)"
+    },
+    "typicalBatchSize": 1,
+    "notes": "STDP is event-driven: O(spikes) cost. Efficient on neuromorphic hardware. Online learning (no batch gradient descent)."
+  }
+}

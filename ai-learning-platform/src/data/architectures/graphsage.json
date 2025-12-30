@@ -1,0 +1,297 @@
+{
+  "id": "graphsage",
+  "name": "GraphSAGE",
+  "category": "graph",
+  "subcategory": "Sampling-Based",
+  "year": 2017,
+  "authors": ["William L. Hamilton", "Rex Ying", "Jure Leskovec"],
+  "paper": "Inductive Representation Learning on Large Graphs",
+  "paperUrl": "https://arxiv.org/abs/1706.02216",
+  "description": "GraphSAGE (SAmple and aggreGatE) solves a critical problem: how to scale graph neural networks to massive graphs with billions of nodes? GCN and GAT require the full graph in memory—impossible for web-scale graphs (Facebook: 3B users, Amazon: 500M products). GraphSAGE's innovation: instead of aggregating from ALL neighbors, sample a fixed-size subset. Each layer: sample k neighbors, aggregate their features (mean/pool/LSTM), combine with node's own features. Result: constant memory per node, enables minibatch training. Inductive learning: learns aggregation functions that generalize to unseen nodes/graphs—no retraining needed when graph grows. GraphSAGE is the foundation for industrial graph learning (Pinterest recommendations, Alibaba product graphs, Google Maps). Multiple aggregators (mean, maxpool, LSTM) adapt to different data. Unsupervised pre-training via graph structure improves performance.",
+  "plainEnglish": "Problem: Facebook has 3 billion users. GCN requires storing entire graph + all features in memory. Impossible! GraphSAGE solution: sampling. For each node, instead of aggregating from ALL friends (could be 10,000+), sample random 25 friends. Next layer: from those 25, sample 10 second-hop friends. Total neighbors: 25 + 25×10 = 275 (manageable!). How? (1) Sample k neighbors uniformly. (2) Aggregate their features (mean, max-pool, or LSTM). (3) Concatenate with node's own features. (4) Transform via neural network. Repeat for L layers. Inductive: train aggregation function (not node embeddings). New user joins? Apply same aggregation function—no retraining! Unsupervised: even without labels, train to predict graph structure (are two nodes neighbors?). Learn useful representations. Applications: Pinterest uses GraphSAGE to recommend pins (237M users, 200B pins). Alibaba for product recommendations. Google Maps for traffic prediction.",
+  "keyInnovation": "Fixed-size neighborhood sampling for scalability. Each layer samples k neighbors (e.g., 25) instead of using all. Complexity: O(k^L) per node (constant!) vs O(d^L) for GCN where d is average degree (could be thousands). Minibatch training: sample batch of nodes, sample their neighborhoods, train on subgraphs. Enables billion-scale graphs. Multiple aggregators: (1) Mean: simple average of neighbor features. (2) Pool: element-wise max after MLP (learns nonlinear transformations). (3) LSTM: apply LSTM to random permutation of neighbors (captures sequential patterns). Inductive bias: aggregators are permutation invariant (order of neighbors doesn't matter). Unsupervised loss: predict if two nodes are neighbors via graph structure—no labels needed! Combine with supervised loss for semi-supervised learning. Negative sampling: train to distinguish neighbors from non-neighbors. Foundation for industrial GNNs: PinSAGE (Pinterest), AliGraph (Alibaba), Meituan food delivery.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "graphsage_conv",
+        "name": "GraphSAGE Layer 1",
+        "description": "Sample k=25 neighbors, aggregate via mean/pool/LSTM, concatenate with self features",
+        "parameters": {
+          "in_features": 128,
+          "out_features": 128,
+          "aggregator": "mean",
+          "num_samples": 25,
+          "normalize": true
+        },
+        "parameterCount": 32896
+      },
+      {
+        "type": "graphsage_conv",
+        "name": "GraphSAGE Layer 2",
+        "description": "Sample k=10 neighbors from Layer 1 outputs",
+        "parameters": {
+          "in_features": 128,
+          "out_features": 64,
+          "aggregator": "mean",
+          "num_samples": 10,
+          "normalize": true
+        },
+        "parameterCount": 12352
+      },
+      {
+        "type": "linear",
+        "name": "Output Layer",
+        "description": "Classification or embedding output",
+        "parameters": {
+          "in_features": 64,
+          "out_features": 7
+        },
+        "parameterCount": 455
+      }
+    ],
+    "depth": 3,
+    "parameters": 45703,
+    "flops": "~k^L × d² per node (k=num_samples, L=depth)",
+    "memoryFootprint": "~180 KB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Neighbor Sampling",
+        "latex": "\\mathcal{N}_k(v) = \\text{UniformSample}(\\mathcal{N}(v), k)",
+        "explanation": "Sample k neighbors uniformly at random from node v's full neighborhood. If deg(v) < k, use all neighbors. If deg(v) ≥ k, sample without replacement. This makes computation independent of graph density—high-degree nodes don't slow down training.",
+        "variables": {
+          "N(v)": "Full neighborhood of node v",
+          "N_k(v)": "Sampled k neighbors",
+          "k": "Sample size (e.g., 25 for layer 1, 10 for layer 2)"
+        }
+      },
+      {
+        "name": "Aggregation (Mean)",
+        "latex": "\\mathbf{h}_{\\mathcal{N}(v)}^{(l)} = \\text{MEAN}\\left(\\{\\mathbf{h}_u^{(l-1)}, \\forall u \\in \\mathcal{N}_k(v)\\}\\right)",
+        "explanation": "Aggregate neighbor features by averaging. Simple, effective, permutation invariant. Works well when neighbors have similar importance. Alternative: use attention weights (like GAT) but increases complexity.",
+        "variables": {
+          "h_N(v)": "Aggregated neighborhood features",
+          "h_u^(l-1)": "Features of neighbor u at layer l-1"
+        }
+      },
+      {
+        "name": "Aggregation (Pool)",
+        "latex": "\\mathbf{h}_{\\mathcal{N}(v)}^{(l)} = \\max\\left(\\{\\sigma(\\mathbf{W}_{pool} \\mathbf{h}_u^{(l-1)} + \\mathbf{b}), \\forall u \\in \\mathcal{N}_k(v)\\}\\right)",
+        "explanation": "Element-wise max-pooling after linear transformation. Learns to select most important features across neighbors. σ is ReLU. More expressive than mean but higher compute. Useful for heterogeneous neighborhoods.",
+        "variables": {
+          "W_pool": "Pooling weight matrix",
+          "max": "Element-wise maximum",
+          "σ": "Activation (ReLU)"
+        }
+      },
+      {
+        "name": "Node Update (Concatenate + Transform)",
+        "latex": "\\mathbf{h}_v^{(l)} = \\sigma\\left(\\mathbf{W}^{(l)} \\cdot [\\mathbf{h}_v^{(l-1)} \\, || \\, \\mathbf{h}_{\\mathcal{N}(v)}^{(l)}]\\right)",
+        "explanation": "THE CORE. Concatenate node's own features h_v with aggregated neighbor features h_N(v). Transform via weight matrix W. σ is ReLU. Concatenation (vs addition in GCN) preserves both self and neighbor information. Normalize output to unit L2 norm (stabilizes training).",
+        "variables": {
+          "h_v^(l)": "Node v's features at layer l",
+          "||": "Concatenation",
+          "W^(l)": "Learnable weight matrix",
+          "σ": "Activation function"
+        }
+      },
+      {
+        "name": "L2 Normalization",
+        "latex": "\\mathbf{h}_v^{(l)} \\leftarrow \\frac{\\mathbf{h}_v^{(l)}}{||\\mathbf{h}_v^{(l)}||_2}",
+        "explanation": "Normalize embeddings to unit norm after each layer. Prevents exploding magnitudes, improves generalization. Critical for unsupervised learning (cosine similarity). Optional for supervised tasks.",
+        "variables": {
+          "||·||_2": "L2 norm (Euclidean length)"
+        }
+      },
+      {
+        "name": "Unsupervised Loss (Graph-based)",
+        "latex": "\\mathcal{L} = -\\log\\left(\\sigma(\\mathbf{z}_u^T \\mathbf{z}_v)\\right) - Q \\cdot \\mathbb{E}_{v_n \\sim P_n(v)} \\log\\left(\\sigma(-\\mathbf{z}_u^T \\mathbf{z}_{v_n})\\right)",
+        "explanation": "Train without labels using graph structure. Positive pairs (u,v): actual neighbors (from random walks). Negative pairs (u, v_n): non-neighbors sampled from noise distribution P_n. z_u, z_v are learned embeddings. σ is sigmoid. Q is number of negative samples (e.g., 10). Maximizes similarity of neighbors, minimizes similarity of non-neighbors.",
+        "variables": {
+          "z_u, z_v": "Learned node embeddings",
+          "σ": "Sigmoid function",
+          "P_n": "Negative sampling distribution",
+          "Q": "Number of negative samples"
+        }
+      },
+      {
+        "name": "Computational Complexity per Node",
+        "latex": "\\mathcal{O}\\left(\\prod_{i=1}^{L} k_i \\cdot d^2\\right) = \\mathcal{O}(k_1 \\cdot k_2 \\cdot \\ldots \\cdot k_L \\cdot d^2)",
+        "explanation": "For L layers with sample sizes k_1, k_2, ..., k_L: total neighbors is k_1 × k_2 × ... × k_L. Example: L=2, k_1=25, k_2=10 → 250 neighbors. Independent of graph size! GCN: O(d^L) where d is average degree (could be 1000+ for social networks). GraphSAGE: constant.",
+        "variables": {
+          "k_i": "Sample size at layer i",
+          "L": "Number of layers",
+          "d": "Feature dimension"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Permutation Invariance of Aggregators",
+        "statement": "Aggregation functions (mean, max, LSTM) are permutation invariant: order of neighbors doesn't affect output. This is essential for graph learning where neighborhoods are unordered sets.",
+        "significance": "Ensures consistency regardless of how neighbors are stored or sampled. LSTM aggregator requires random permutation to maintain invariance."
+      },
+      {
+        "name": "Inductive Learning Capability",
+        "statement": "GraphSAGE learns aggregation functions (not node embeddings), enabling zero-shot generalization to unseen nodes/graphs without retraining.",
+        "significance": "Critical for dynamic graphs (social networks, e-commerce). New nodes: immediately compute embeddings via learned aggregation. Enables transfer learning across graphs."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nimport random\n\nclass SAGEConv(nn.Module):\n    def __init__(self, in_features, out_features, aggregator='mean'):\n        super().__init__()\n        self.in_features = in_features\n        self.out_features = out_features\n        self.aggregator = aggregator\n        \n        # Weight for concatenated [h_v || h_N(v)]\n        self.linear = nn.Linear(2 * in_features, out_features)\n        \n        if aggregator == 'pool':\n            self.pool_linear = nn.Linear(in_features, in_features)\n    \n    def forward(self, X, edge_index, num_samples=25):\n        # X: node features (n × in_features)\n        # edge_index: edges (2 × num_edges)\n        n = X.size(0)\n        \n        # Build adjacency list\n        adj_list = [[] for _ in range(n)]\n        for i in range(edge_index.size(1)):\n            src, dst = edge_index[0, i].item(), edge_index[1, i].item()\n            adj_list[src].append(dst)\n        \n        # Aggregate neighbors\n        aggregated = []\n        for v in range(n):\n            neighbors = adj_list[v]\n            \n            # Sample k neighbors\n            if len(neighbors) > num_samples:\n                neighbors = random.sample(neighbors, num_samples)\n            \n            if len(neighbors) == 0:\n                # No neighbors: use zero vector\n                agg_v = torch.zeros(self.in_features, device=X.device)\n            else:\n                neighbor_features = X[neighbors]\n                \n                if self.aggregator == 'mean':\n                    agg_v = neighbor_features.mean(dim=0)\n                elif self.aggregator == 'pool':\n                    # Max-pooling after linear transformation\n                    agg_v = F.relu(self.pool_linear(neighbor_features)).max(dim=0)[0]\n                else:\n                    raise ValueError(f'Unknown aggregator: {self.aggregator}')\n            \n            aggregated.append(agg_v)\n        \n        aggregated = torch.stack(aggregated)  # (n × in_features)\n        \n        # Concatenate with self features\n        combined = torch.cat([X, aggregated], dim=1)  # (n × 2*in_features)\n        \n        # Transform\n        out = self.linear(combined)\n        \n        # L2 normalize\n        out = F.normalize(out, p=2, dim=1)\n        \n        return out\n\nclass GraphSAGE(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim, num_layers=2, aggregator='mean'):\n        super().__init__()\n        self.num_layers = num_layers\n        self.convs = nn.ModuleList()\n        \n        # First layer\n        self.convs.append(SAGEConv(input_dim, hidden_dim, aggregator))\n        \n        # Hidden layers\n        for _ in range(num_layers - 2):\n            self.convs.append(SAGEConv(hidden_dim, hidden_dim, aggregator))\n        \n        # Output layer\n        self.convs.append(SAGEConv(hidden_dim, output_dim, aggregator))\n    \n    def forward(self, X, edge_index, num_samples=[25, 10]):\n        for i, conv in enumerate(self.convs):\n            k = num_samples[i] if i < len(num_samples) else 10\n            X = conv(X, edge_index, num_samples=k)\n            if i < len(self.convs) - 1:\n                X = F.relu(X)\n        return X\n\n# Training (supervised)\nmodel = GraphSAGE(input_dim=128, hidden_dim=128, output_dim=7, aggregator='mean')\noptimizer = torch.optim.Adam(model.parameters(), lr=0.01)\n\nfor epoch in range(100):\n    model.train()\n    optimizer.zero_grad()\n    \n    # Forward pass\n    embeddings = model(X, edge_index, num_samples=[25, 10])\n    \n    # Supervised loss (classification)\n    logits = F.log_softmax(embeddings, dim=1)\n    loss = F.nll_loss(logits[train_mask], labels[train_mask])\n    \n    loss.backward()\n    optimizer.step()\n\n# Using PyTorch Geometric (with NeighborLoader for efficient sampling)\nimport torch_geometric.nn as geom_nn\nfrom torch_geometric.loader import NeighborLoader\n\nclass GraphSAGE_PyG(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim):\n        super().__init__()\n        self.conv1 = geom_nn.SAGEConv(input_dim, hidden_dim)\n        self.conv2 = geom_nn.SAGEConv(hidden_dim, output_dim)\n    \n    def forward(self, x, edge_index):\n        x = self.conv1(x, edge_index)\n        x = F.relu(x)\n        x = F.dropout(x, p=0.5, training=self.training)\n        x = self.conv2(x, edge_index)\n        return x\n\n# NeighborLoader for minibatch training on large graphs\ntrain_loader = NeighborLoader(\n    data,\n    num_neighbors=[25, 10],  # Sample 25 neighbors in layer 1, 10 in layer 2\n    batch_size=128,\n    input_nodes=data.train_mask,\n)\n\nmodel = GraphSAGE_PyG(input_dim=128, hidden_dim=128, output_dim=7)\noptimizer = torch.optim.Adam(model.parameters(), lr=0.01)\n\nfor epoch in range(100):\n    model.train()\n    for batch in train_loader:\n        optimizer.zero_grad()\n        out = model(batch.x, batch.edge_index)\n        loss = F.cross_entropy(out[:batch.batch_size], batch.y[:batch.batch_size])\n        loss.backward()\n        optimizer.step()"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Large-Scale Recommendation Systems",
+      "application": "Product/content recommendations on billion-node graphs",
+      "description": "E-commerce (Amazon, Alibaba), social media (Pinterest, Instagram), streaming (Netflix, YouTube). Graphs: users, items, interactions. GraphSAGE samples neighborhoods for scalable training. Predicts user-item affinity, generates personalized recommendations.",
+      "realWorldExample": "PinSAGE (Pinterest): 3B nodes, 18B edges. Random-walk based sampling + GraphSAGE. Improved engagement by 150%+. Deployed in production serving 400M users. Alibaba's AliGraph: product recommendation graph with sampling-based GNN."
+    },
+    {
+      "domain": "Fraud Detection in Financial Networks",
+      "application": "Detect fraudulent accounts, transactions, insurance claims",
+      "description": "Financial graphs: users, accounts, transactions, devices. Fraudsters form dense subgraphs (collusion rings). GraphSAGE learns to distinguish fraud patterns from legitimate behavior. Inductive: immediately classify new accounts without retraining.",
+      "realWorldExample": "Ant Financial (Alipay): GraphSAGE for fraud detection on 1B+ user graph. Detects device farms, fake accounts. Reduces fraud by 30%+. Insurance companies use GraphSAGE to detect claim fraud rings (fake accidents, staged incidents)."
+    },
+    {
+      "domain": "Social Network Analysis at Scale",
+      "application": "Influence prediction, community detection, bot detection",
+      "description": "Facebook (3B users), Twitter (400M users), LinkedIn (900M users). GraphSAGE enables GNN training on massive social graphs. Predicts: influencers, communities, fake accounts, content virality. Sampling makes billion-scale feasible.",
+      "realWorldExample": "Twitter uses sampling-based GNNs for bot detection. LinkedIn for skill recommendation (user-skill-job graph). Snapchat for friend recommendation. All use GraphSAGE-style sampling due to graph size."
+    },
+    {
+      "domain": "Knowledge Graph Completion",
+      "application": "Inductive link prediction on growing knowledge graphs",
+      "description": "Knowledge graphs (Google, Microsoft, Amazon) grow continuously: new entities, relations added daily. GraphSAGE's inductive learning: predict links for new entities without retraining. Enables question answering, search, recommendations.",
+      "realWorldExample": "Google Knowledge Graph: billions of entities. GraphSAGE for entity linking, relation prediction. Amazon product graph: new products daily, GraphSAGE predicts categories, related items. Medical knowledge graphs (PubMed): GraphSAGE for drug-disease link prediction."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Reddit (Social Network)",
+        "otherMetrics": {
+          "Nodes": "232,965 posts",
+          "Edges": "114M",
+          "Task": "Community classification",
+          "F1-Score": "~95.4% (inductive)",
+          "note": "Large-scale inductive learning benchmark"
+        }
+      },
+      {
+        "name": "PPI (Protein-Protein Interaction)",
+        "otherMetrics": {
+          "Graphs": "24 (20 train, 2 val, 2 test)",
+          "Task": "Multi-label node classification",
+          "F1-Score": "~61.2% (inductive)",
+          "note": "Generalizes to unseen graphs"
+        }
+      },
+      {
+        "name": "Cora (Citation Network)",
+        "otherMetrics": {
+          "Accuracy": "~81.0% (transductive)",
+          "note": "Similar to GCN on small graphs"
+        }
+      },
+      {
+        "name": "Amazon Products",
+        "otherMetrics": {
+          "Nodes": "1.5M products",
+          "Task": "Product categorization",
+          "note": "Industrial-scale benchmark"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Neighborhood Sample Sizes",
+        "recommendedValue": "[25, 10] for 2 layers",
+        "rationale": "Layer 1: sample 25 neighbors. Layer 2: sample 10 from each → 250 total. Balance: larger k = more info but slower. Smaller k = faster but may miss info. Tune per dataset. Deep models (3+ layers): [25, 10, 5]."
+      },
+      {
+        "parameter": "Aggregator Type",
+        "recommendedValue": "Mean (default), Pool for heterogeneous graphs",
+        "rationale": "Mean: simple, effective, fast. Pool: learns feature selection, better for diverse neighbors. LSTM: most expressive but slowest. Start with mean, try pool if underfitting."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.01 (supervised), 0.001 (unsupervised)",
+        "rationale": "Adam optimizer. Higher LR for supervised (clear signal). Lower for unsupervised (graph-based loss is noisy). Use LR decay after 50% of training."
+      },
+      {
+        "parameter": "Batch Size (Minibatch Training)",
+        "recommendedValue": "128-512 nodes per batch",
+        "rationale": "Larger batches = more stable gradients but higher memory. Small graphs: 128. Large graphs (Reddit): 512-1024. Use NeighborLoader in PyTorch Geometric."
+      },
+      {
+        "parameter": "Number of Layers",
+        "recommendedValue": "2-3 layers",
+        "rationale": "2 layers = 2-hop neighborhood (often sufficient). 3 layers for larger graphs. Beyond 3: over-smoothing risk. Use residual connections for deeper models."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "High variance in training (unstable loss)",
+        "solution": "Increase batch size (128→512). Use more samples per layer ([25,10]→[50,20]). Add gradient clipping (max_norm=1.0). Increase training epochs (100→200) or use LR warmup."
+      },
+      {
+        "problem": "Out of memory (large graphs)",
+        "solution": "Reduce sample sizes ([25,10]→[10,5]). Use smaller batches (512→128). Enable gradient checkpointing. Use NeighborLoader with num_workers>0 for CPU-GPU parallelism. Consider ClusterGCN for very large graphs."
+      },
+      {
+        "problem": "Sampling bias (rare nodes underrepresented)",
+        "solution": "Use importance sampling (sample high-degree nodes less frequently). PPRGo uses personalized PageRank for sampling. Layer-wise sampling: sample different neighbors per layer (variance reduction)."
+      },
+      {
+        "problem": "Slow training on large graphs",
+        "solution": "Use NeighborLoader with multiple workers. Precompute fixed samples (cache neighborhoods). Use GPU for sampling (GraphSAINT). Consider FastGCN (layer-wise sampling) or PPRGo (precomputation)."
+      }
+    ]
+  },
+  "comparisons": ["gcn", "gat", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Inductive Representation Learning on Large Graphs",
+      "url": "https://arxiv.org/abs/1706.02216",
+      "description": "Original GraphSAGE paper (2017) by Hamilton et al."
+    },
+    {
+      "type": "paper",
+      "title": "Graph Convolutional Neural Networks for Web-Scale Recommender Systems",
+      "url": "https://arxiv.org/abs/1806.01973",
+      "description": "PinSAGE paper - GraphSAGE at Pinterest scale"
+    },
+    {
+      "type": "code",
+      "title": "PyTorch Geometric SAGEConv",
+      "url": "https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.SAGEConv",
+      "description": "Official GraphSAGE implementation"
+    },
+    {
+      "type": "tutorial",
+      "title": "Scaling GNNs with GraphSAGE",
+      "url": "https://pytorch-geometric.readthedocs.io/en/latest/notes/introduction.html#mini-batches",
+      "description": "PyG tutorial on minibatch training"
+    }
+  ],
+  "tags": ["graphsage", "sampling", "inductive-learning", "scalable-gnn", "recommendation", "2017"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (with sampling)",
+    "recommendedVRAM": "16 GB (large graphs, large batches)",
+    "trainingTime": {
+      "gpu": "10-30 min for Reddit (with sampling), hours for billion-scale (PinSAGE)"
+    },
+    "storageRequirements": "~2 MB (model), variable for graph data"
+  }
+}

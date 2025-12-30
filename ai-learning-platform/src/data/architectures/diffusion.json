@@ -1,0 +1,226 @@
+{
+  "id": "diffusion",
+  "name": "Diffusion Model (DDPM)",
+  "category": "generative",
+  "subcategory": "Diffusion-Based",
+  "year": 2020,
+  "authors": ["Jonathan Ho", "Ajay Jain", "Pieter Abbeel"],
+  "paper": "Denoising Diffusion Probabilistic Models",
+  "paperUrl": "https://arxiv.org/abs/2006.11239",
+  "description": "Diffusion models generate data by reversing a gradual noising process. Training: slowly corrupt data with Gaussian noise over T=1000 steps until it becomes pure noise. Inference: learn to denoise, starting from random noise and iteratively removing it to generate samples. Unlike GANs (adversarial) or VAEs (variational inference), diffusion uses a simple denoising objective. The key: model learns the score function (gradient of log density) which guides denoising. Result: state-of-the-art image quality, stable training, and mode coverage. Diffusion powers DALL-E 2, Stable Diffusion, Imagen—the current leaders in text-to-image generation.",
+  "plainEnglish": "Imagine watching a photo slowly fade into static noise over 1000 steps. Diffusion training learns to reverse this: given noisy image at step t, predict slightly cleaner image at step t-1. Once trained, generation: start with pure static → denoise 1000 times → get photo! It's like watching a polaroid develop in reverse. Why 1000 steps? Each step is tiny, easy to learn. The model (a U-Net) predicts noise to remove at each step. Training is simple: add known noise to real images, train model to predict that noise. No adversarial training, no KL divergence—just noise prediction. Surprisingly, this simple approach beats GANs in quality and diversity!",
+  "keyInnovation": "Forward diffusion: systematically add Gaussian noise q(x_t|x_{t-1}) until x_T ~ N(0,I). Reverse diffusion: learn p_θ(x_{t-1}|x_t) to denoise. The variance schedule β_t controls noise rate. Reparameterization: instead of predicting x_{t-1}, predict noise ε. Enables efficient training and sampling. Connection to score matching: diffusion learns ∇ log p(x), the data score. Classifier-free guidance: steer generation toward text prompts by combining conditional/unconditional scores. DDIM: deterministic sampling in 50 steps instead of 1000 (20× faster). Latent diffusion (Stable Diffusion): operate in VAE latent space, not pixel space (much faster).",
+  "architecture": {
+    "inputShape": [3, 256, 256],
+    "outputShape": [3, 256, 256],
+    "layers": [
+      {
+        "type": "unet",
+        "name": "Denoising U-Net",
+        "description": "Predicts noise at each timestep. Takes noisy image x_t and timestep t as input.",
+        "parameters": {
+          "channels": [128, 256, 512, 512],
+          "num_res_blocks": 2,
+          "attention_resolutions": [16, 8],
+          "num_heads": 8,
+          "timestep_embedding_dim": 512
+        },
+        "parameterCount": 85000000
+      }
+    ],
+    "depth": 32,
+    "parameters": 85000000,
+    "flops": "~170B per denoising step",
+    "memoryFootprint": "~340 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Forward Diffusion (Fixed)",
+        "latex": "q(x_t | x_{t-1}) = \\mathcal{N}(x_t; \\sqrt{1-\\beta_t} x_{t-1}, \\beta_t \\mathbf{I})",
+        "explanation": "Add Gaussian noise at each step. β_t is variance schedule (e.g., linear 0.0001 → 0.02). After T=1000 steps, x_T ≈ N(0,I). Can jump to any step: q(x_t|x_0) = N(x_t; √ᾱ_t x_0, (1-ᾱ_t)I) where ᾱ_t = ∏(1-β_s).",
+        "variables": {
+          "x_t": "Noisy image at step t",
+          "β_t": "Noise variance at step t",
+          "ᾱ_t": "Cumulative product of (1-β_s)"
+        }
+      },
+      {
+        "name": "Reverse Diffusion (Learned)",
+        "latex": "p_\\theta(x_{t-1} | x_t) = \\mathcal{N}(x_{t-1}; \\mu_\\theta(x_t, t), \\Sigma_\\theta(x_t, t))",
+        "explanation": "Model learns to reverse the process. Predict mean μ_θ and variance Σ_θ. In practice, fix Σ and learn only μ (or equivalently, learn noise ε).",
+        "variables": {
+          "μ_θ(x_t,t)": "Predicted mean (denoised image)",
+          "Σ_θ(x_t,t)": "Predicted variance (often fixed)"
+        }
+      },
+      {
+        "name": "Training Objective (Simplified)",
+        "latex": "\\mathcal{L}_{simple} = \\mathbb{E}_{t, x_0, \\epsilon} [||\\epsilon - \\epsilon_\\theta(x_t, t)||^2]",
+        "explanation": "THE KEY. Sample random timestep t, add noise ε ~ N(0,I) to x_0 to get x_t. Train model ε_θ to predict that noise. MSE loss. Simpler than VAE's ELBO, works better in practice!",
+        "variables": {
+          "ε": "True noise added",
+          "ε_θ(x_t,t)": "Predicted noise by model",
+          "x_t": "√ᾱ_t x_0 + √(1-ᾱ_t) ε"
+        }
+      },
+      {
+        "name": "Sampling (DDPM)",
+        "latex": "x_{t-1} = \\frac{1}{\\sqrt{1-\\beta_t}} \\left(x_t - \\frac{\\beta_t}{\\sqrt{1-\\bar{\\alpha}_t}} \\epsilon_\\theta(x_t, t)\\right) + \\sqrt{\\beta_t} z",
+        "explanation": "Iterative denoising. Start x_T ~ N(0,I). For t=T...1: predict noise, remove it, add small random noise z (except final step). After 1000 steps, get x_0.",
+        "variables": {
+          "z": "Random noise N(0,I) for stochasticity"
+        }
+      },
+      {
+        "name": "Classifier-Free Guidance",
+        "latex": "\\tilde{\\epsilon}_\\theta(x_t, t, c) = \\epsilon_\\theta(x_t, t, \\emptyset) + w \\cdot (\\epsilon_\\theta(x_t, t, c) - \\epsilon_\\theta(x_t, t, \\emptyset))",
+        "explanation": "For conditional generation (text→image): extrapolate in direction of conditioning c (text embedding). w>1 strengthens guidance. w=7.5 typical for Stable Diffusion. Enables text control without separate classifier!",
+        "variables": {
+          "c": "Conditioning (e.g., CLIP text embedding)",
+          "w": "Guidance scale (1=no guidance, 7.5=strong)",
+          "∅": "Null/unconditional"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Connection to Score Matching",
+        "statement": "Denoising diffusion is equivalent to learning the score function ∇ log p(x_t). The noise prediction ε_θ is related to score.",
+        "significance": "Unifies diffusion with score-based generative models. Explains why simple denoising objective works so well."
+      },
+      {
+        "name": "Sampling as Langevin Dynamics",
+        "statement": "DDPM sampling approximates Langevin dynamics guided by learned score. Each step: move toward high-density region + add noise.",
+        "significance": "Theoretical foundation. Explains why diffusion explores modes better than GANs (no mode collapse)."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\n\nclass SimplifiedDiffusion(nn.Module):\n    def __init__(self, img_channels=3, timesteps=1000):\n        super().__init__()\n        self.timesteps = timesteps\n        \n        # Variance schedule (linear)\n        self.betas = torch.linspace(1e-4, 0.02, timesteps)\n        self.alphas = 1 - self.betas\n        self.alpha_bar = torch.cumprod(self.alphas, dim=0)\n        \n        # Simplified U-Net (in practice, use full U-Net with attention)\n        self.model = nn.Sequential(\n            nn.Conv2d(img_channels + 1, 64, 3, padding=1),  # +1 for timestep\n            nn.ReLU(),\n            nn.Conv2d(64, 128, 3, padding=1),\n            nn.ReLU(),\n            nn.Conv2d(128, 64, 3, padding=1),\n            nn.ReLU(),\n            nn.Conv2d(64, img_channels, 3, padding=1)\n        )\n    \n    def forward_diffusion(self, x0, t, noise=None):\n        # Add noise to x0 to get x_t\n        if noise is None:\n            noise = torch.randn_like(x0)\n        \n        alpha_bar_t = self.alpha_bar[t].view(-1, 1, 1, 1)\n        xt = torch.sqrt(alpha_bar_t) * x0 + torch.sqrt(1 - alpha_bar_t) * noise\n        return xt, noise\n    \n    def predict_noise(self, xt, t):\n        # Predict noise (simplified - no proper timestep embedding)\n        t_embed = t.float().view(-1, 1, 1, 1).expand(-1, 1, xt.shape[2], xt.shape[3])\n        x_with_t = torch.cat([xt, t_embed], dim=1)\n        return self.model(x_with_t)\n    \n    @torch.no_grad()\n    def sample(self, shape, device):\n        # Start from noise\n        x = torch.randn(shape, device=device)\n        \n        # Iteratively denoise\n        for t in reversed(range(self.timesteps)):\n            t_batch = torch.full((shape[0],), t, device=device, dtype=torch.long)\n            \n            # Predict noise\n            pred_noise = self.predict_noise(x, t_batch)\n            \n            # Compute x_{t-1}\n            alpha_t = self.alphas[t]\n            alpha_bar_t = self.alpha_bar[t]\n            beta_t = self.betas[t]\n            \n            # Mean\n            x = (x - beta_t / torch.sqrt(1 - alpha_bar_t) * pred_noise) / torch.sqrt(alpha_t)\n            \n            # Add noise (except last step)\n            if t > 0:\n                x += torch.sqrt(beta_t) * torch.randn_like(x)\n        \n        return x\n\n# Training\nmodel = SimplifiedDiffusion()\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-4)\n\nfor epoch in range(100):\n    for x0 in dataloader:\n        # Random timestep\n        t = torch.randint(0, model.timesteps, (x0.shape[0],))\n        \n        # Add noise\n        xt, noise = model.forward_diffusion(x0, t)\n        \n        # Predict noise\n        pred_noise = model.predict_noise(xt, t)\n        \n        # MSE loss\n        loss = nn.functional.mse_loss(pred_noise, noise)\n        \n        optimizer.zero_grad()\n        loss.backward()\n        optimizer.step()\n\n# Generate samples\nsamples = model.sample((16, 3, 64, 64), device='cuda')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Text-to-Image Generation",
+      "application": "DALL-E 2, Stable Diffusion, Imagen, Midjourney",
+      "description": "Generate photorealistic images from text prompts. Diffusion models dominate this space, surpassing GANs in quality and controllability.",
+      "realWorldExample": "Stable Diffusion (open-source): 100M+ users, AI art movement. Midjourney: $200M revenue (2023). DALL-E 2: integrated into Bing, Designer. Used in advertising, concept art, game development."
+    },
+    {
+      "domain": "Image Editing",
+      "application": "Inpainting, outpainting, style transfer",
+      "description": "Conditional diffusion enables targeted editing: remove objects, extend images beyond borders, change styles while preserving content.",
+      "realWorldExample": "Adobe Firefly uses diffusion for generative fill. Stability AI's Stable Diffusion supports inpainting, used by designers for rapid prototyping."
+    },
+    {
+      "domain": "Super-Resolution",
+      "application": "Upscale images with realistic details",
+      "description": "SR3, Imagen: diffusion-based super-resolution adds convincing details when upscaling. Better than GAN-based methods for large factors (4-8×).",
+      "realWorldExample": "Used in film restoration, medical imaging (enhance low-res scans), satellite imagery. Google Photos uses diffusion for 'enhance' feature."
+    },
+    {
+      "domain": "3D Generation",
+      "application": "Generate 3D objects from text/images",
+      "description": "DreamFusion, Point-E: use diffusion to generate 3D shapes. Shap-E: text→3D in seconds. Revolutionizing 3D content creation.",
+      "realWorldExample": "OpenAI's Shap-E generates 3D models from text. Used in game development, AR/VR, product design. Democratizes 3D creation."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "CIFAR-10",
+        "otherMetrics": {
+          "FID": "~3.17 (DDPM)",
+          "IS": "~9.46",
+          "note": "Beats GANs in FID (lower=better)"
+        }
+      },
+      {
+        "name": "ImageNet 256×256",
+        "otherMetrics": {
+          "FID": "~3.94 (Guided Diffusion)",
+          "note": "SOTA for unconditional generation"
+        }
+      },
+      {
+        "name": "COCO (Text-to-Image)",
+        "otherMetrics": {
+          "FID": "~7.27 (DALL-E 2), ~12.6 (Stable Diffusion v1.4)",
+          "CLIP Score": "~0.32",
+          "note": "Photorealistic text-to-image"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Timesteps",
+        "recommendedValue": "1000 (training), 50-250 (DDIM sampling)",
+        "rationale": "More timesteps = better quality but slower. DDIM enables fast sampling with quality trade-off."
+      },
+      {
+        "parameter": "Variance Schedule",
+        "recommendedValue": "Linear (1e-4 to 0.02) or cosine",
+        "rationale": "Cosine schedule often better for high-res images. Controls noise rate over diffusion process."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "1e-4 to 2e-4",
+        "rationale": "Adam optimizer. Lower for fine-tuning pretrained models. Use warmup for stability."
+      },
+      {
+        "parameter": "Guidance Scale (Inference)",
+        "recommendedValue": "7.5 for Stable Diffusion",
+        "rationale": "Higher = more prompt adherence but less diversity. 1=no guidance, 20=very strong."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Slow sampling (1000 steps)",
+        "solution": "Use DDIM (deterministic, 50 steps), DPM-Solver (20-25 steps), or progressive distillation. Latent diffusion (Stable Diffusion) operates in VAE latent space (8× faster)."
+      },
+      {
+        "problem": "High memory usage",
+        "solution": "Use gradient checkpointing during training. During inference, use lower precision (fp16/bf16), optimize attention (xFormers, Flash Attention). Generate in VAE latent space."
+      },
+      {
+        "problem": "Blurry or unrealistic samples",
+        "solution": "Check variance schedule (try cosine). Increase model capacity (more layers, attention). Use classifier-free guidance during sampling. Train longer."
+      }
+    ]
+  },
+  "comparisons": ["gan", "vae", "stable-diffusion"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Denoising Diffusion Probabilistic Models",
+      "url": "https://arxiv.org/abs/2006.11239",
+      "description": "Original DDPM paper (2020) by Ho et al."
+    },
+    {
+      "type": "paper",
+      "title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+      "url": "https://arxiv.org/abs/2112.10752",
+      "description": "Stable Diffusion paper - diffusion in latent space"
+    },
+    {
+      "type": "blog",
+      "title": "The Annotated Diffusion Model",
+      "url": "https://huggingface.co/blog/annotated-diffusion",
+      "description": "Step-by-step PyTorch implementation"
+    }
+  ],
+  "tags": ["diffusion", "ddpm", "generative", "denoising", "text-to-image", "2020"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "8 GB (training small models)",
+    "recommendedVRAM": "24 GB (A100 for high-res or text-conditional)",
+    "trainingTime": {
+      "gpu": "2-4 days for CIFAR-10, weeks for ImageNet on 8 GPUs"
+    },
+    "storageRequirements": "~300 MB (base model)"
+  }
+}

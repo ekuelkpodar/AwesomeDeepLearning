@@ -1,0 +1,287 @@
+{
+  "id": "transformer",
+  "name": "Transformer (Vanilla)",
+  "category": "transformer",
+  "subcategory": "Encoder-Decoder",
+  "year": 2017,
+  "authors": ["Ashish Vaswani", "Noam Shazeer", "Niki Parmar", "Jakob Uszkoreit", "Llion Jones", "Aidan N. Gomez", "Łukasz Kaiser", "Illia Polosukhin"],
+  "paper": "Attention Is All You Need",
+  "paperUrl": "https://arxiv.org/abs/1706.03762",
+  "description": "The Transformer revolutionized deep learning by replacing recurrence with self-attention, enabling parallel processing of sequences and capturing long-range dependencies more effectively. It introduced multi-head attention, positional encoding, and a scalable encoder-decoder architecture that became the foundation for modern NLP (BERT, GPT, T5) and beyond (Vision Transformers, AlphaFold). The key insight: 'Attention is all you need'—you don't need RNNs or CNNs to process sequences effectively.",
+  "plainEnglish": "Imagine reading a book where you can instantly reference any previous page without flipping back sequentially. That's what Transformers do! Unlike RNNs that read word-by-word (slow and forgetful), Transformers look at ALL words simultaneously using 'attention'—deciding which words are important for understanding each other word. For example, in 'The animal didn't cross the street because it was too tired,' the Transformer learns that 'it' refers to 'animal' (not 'street') by computing attention scores. Multi-head attention is like having 8 different people read the same sentence, each noticing different patterns (syntax, semantics, coreference). This parallel processing makes training 10-100× faster than RNNs!",
+  "keyInnovation": "Self-attention mechanism processes entire sequences in parallel by computing pairwise relationships between all positions. Each token can 'attend to' every other token, weighted by learned relevance scores. Multi-head attention captures different relationship types simultaneously (e.g., syntactic dependencies, semantic similarity, positional patterns). Positional encoding injects sequence order information since attention itself is permutation-invariant. The encoder-decoder structure with residual connections and layer normalization enables training very deep models (up to 96 layers in modern variants). This architecture scales to billions of parameters and is highly parallelizable on GPUs/TPUs.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "embedding",
+        "name": "Input Embedding + Positional Encoding",
+        "description": "Token embeddings scaled by sqrt(d_model) + sinusoidal position encodings",
+        "parameters": {
+          "vocab_size": 37000,
+          "d_model": 512,
+          "max_len": 5000
+        },
+        "parameterCount": 18944000
+      },
+      {
+        "type": "encoder",
+        "name": "Encoder Stack (6 layers)",
+        "description": "Each layer: Multi-Head Self-Attention → Add&Norm → FFN → Add&Norm",
+        "parameters": {
+          "num_layers": 6,
+          "d_model": 512,
+          "num_heads": 8,
+          "d_ff": 2048,
+          "dropout": 0.1
+        },
+        "parameterCount": 31367168
+      },
+      {
+        "type": "decoder",
+        "name": "Decoder Stack (6 layers)",
+        "description": "Each layer: Masked Self-Attention → Add&Norm → Cross-Attention → Add&Norm → FFN → Add&Norm",
+        "parameters": {
+          "num_layers": 6,
+          "d_model": 512,
+          "num_heads": 8,
+          "d_ff": 2048,
+          "dropout": 0.1
+        },
+        "parameterCount": 47050752
+      },
+      {
+        "type": "linear",
+        "name": "Output Projection",
+        "description": "Project decoder output to vocabulary logits",
+        "parameters": {
+          "d_model": 512,
+          "vocab_size": 37000
+        },
+        "parameterCount": 18944000
+      }
+    ],
+    "depth": 12,
+    "parameters": 116305920,
+    "flops": "Variable (depends on sequence length)",
+    "memoryFootprint": "~465 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Scaled Dot-Product Attention",
+        "latex": "\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V",
+        "explanation": "THE CORE. Computes attention weights by taking dot products between queries (Q) and keys (K), scaling by sqrt(d_k) to prevent vanishing gradients in softmax, then applying weights to values (V). The scaling factor is crucial: without it, dot products grow large for high-dimensional vectors, pushing softmax into regions with tiny gradients.",
+        "variables": {
+          "Q": "Query matrix (what we're looking for)",
+          "K": "Key matrix (what each position offers)",
+          "V": "Value matrix (actual content to retrieve)",
+          "d_k": "Dimension of keys/queries (typically d_model/num_heads)"
+        }
+      },
+      {
+        "name": "Multi-Head Attention",
+        "latex": "\\text{MultiHead}(Q, K, V) = \\text{Concat}(\\text{head}_1, ..., \\text{head}_h)W^O \\text{ where } \\text{head}_i = \\text{Attention}(QW^Q_i, KW^K_i, VW^V_i)",
+        "explanation": "Instead of one attention function, use h=8 parallel attention 'heads' with different learned projections. Each head can learn different relationships (e.g., one for syntax, one for semantics). Concatenate outputs and project back to d_model dimensions.",
+        "variables": {
+          "h": "Number of heads (8 in base model)",
+          "W^Q_i, W^K_i, W^V_i": "Learned projection matrices for head i",
+          "W^O": "Output projection matrix"
+        }
+      },
+      {
+        "name": "Positional Encoding (Sinusoidal)",
+        "latex": "PE_{(pos,2i)} = \\sin\\left(\\frac{pos}{10000^{2i/d_{model}}}\\right), \\quad PE_{(pos,2i+1)} = \\cos\\left(\\frac{pos}{10000^{2i/d_{model}}}\\right)",
+        "explanation": "Since attention has no notion of position (it's permutation-invariant), we add positional encodings to input embeddings. Sinusoidal functions allow the model to attend to relative positions: PE(pos+k) can be expressed as a linear function of PE(pos). Different dimensions oscillate at different frequencies (low freq for early dims, high freq for later dims).",
+        "variables": {
+          "pos": "Position in sequence (0 to seq_len-1)",
+          "i": "Dimension index (0 to d_model/2-1)",
+          "d_model": "Model dimension (512)"
+        }
+      },
+      {
+        "name": "Feed-Forward Network",
+        "latex": "\\text{FFN}(x) = \\max(0, xW_1 + b_1)W_2 + b_2 = \\text{ReLU}(xW_1 + b_1)W_2 + b_2",
+        "explanation": "Two-layer MLP applied identically to each position. Expands to d_ff=2048, then projects back to d_model=512. This adds non-linearity and capacity. Applied position-wise (same weights for all positions, but computed independently).",
+        "variables": {
+          "W_1": "First layer weights (d_model × d_ff)",
+          "W_2": "Second layer weights (d_ff × d_model)"
+        }
+      },
+      {
+        "name": "Layer Normalization",
+        "latex": "\\text{LayerNorm}(x) = \\gamma \\odot \\frac{x - \\mu}{\\sqrt{\\sigma^2 + \\epsilon}} + \\beta",
+        "explanation": "Normalizes activations across features (not batch). Stabilizes training of deep networks. Applied before each sub-layer (Pre-LN) in modern variants, or after (Post-LN) in original paper.",
+        "variables": {
+          "μ": "Mean of x",
+          "σ²": "Variance of x",
+          "γ, β": "Learned scale and shift parameters"
+        }
+      },
+      {
+        "name": "Residual Connections",
+        "latex": "\\text{Output} = \\text{LayerNorm}(x + \\text{Sublayer}(x))",
+        "explanation": "Each sub-layer (attention, FFN) is wrapped in a residual connection. Enables gradient flow in deep networks (like ResNet). Original paper used Post-LN; modern implementations prefer Pre-LN for stability.",
+        "variables": {
+          "x": "Input to sub-layer",
+          "Sublayer(x)": "Attention or FFN output"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Attention Complexity",
+        "statement": "Self-attention has O(n²·d) complexity where n=sequence length, d=dimension. Sequential operations: O(1). Maximum path length between positions: O(1).",
+        "significance": "Constant path length enables learning long-range dependencies (vs O(n) for RNNs). But quadratic complexity limits sequence length (typical max: 512-4096 tokens). This led to efficient attention variants (Linformer, Performer, Flash Attention)."
+      },
+      {
+        "name": "Universal Approximation",
+        "statement": "Transformers are Turing-complete and can approximate any sequence-to-sequence function given sufficient depth and width.",
+        "significance": "Theoretical justification for their expressiveness. Can simulate any algorithm including Turing machines."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport math\n\nclass TransformerModel(nn.Module):\n    def __init__(self, vocab_size, d_model=512, nhead=8, num_layers=6, dim_feedforward=2048, dropout=0.1):\n        super().__init__()\n        self.embedding = nn.Embedding(vocab_size, d_model)\n        self.pos_encoder = PositionalEncoding(d_model, dropout)\n        \n        encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first=True)\n        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)\n        \n        self.fc_out = nn.Linear(d_model, vocab_size)\n        self.d_model = d_model\n        \n    def forward(self, src, src_mask=None):\n        src = self.embedding(src) * math.sqrt(self.d_model)\n        src = self.pos_encoder(src)\n        output = self.transformer(src, src_mask)\n        output = self.fc_out(output)\n        return output\n\nclass PositionalEncoding(nn.Module):\n    def __init__(self, d_model, dropout=0.1, max_len=5000):\n        super().__init__()\n        self.dropout = nn.Dropout(p=dropout)\n        \n        position = torch.arange(max_len).unsqueeze(1)\n        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))\n        pe = torch.zeros(max_len, 1, d_model)\n        pe[:, 0, 0::2] = torch.sin(position * div_term)\n        pe[:, 0, 1::2] = torch.cos(position * div_term)\n        self.register_buffer('pe', pe)\n    \n    def forward(self, x):\n        x = x + self.pe[:x.size(0)]\n        return self.dropout(x)\n\nmodel = TransformerModel(vocab_size=30000)\nprint(f'Parameters: {sum(p.numel() for p in model.parameters()):,}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Machine Translation",
+      "application": "Neural Machine Translation (NMT)",
+      "description": "Original use case. Encoder processes source language, decoder generates target language. Attention allows model to 'look back' at relevant source words while generating each target word.",
+      "realWorldExample": "Google Translate switched from LSTM to Transformers in 2020, improving quality by 5+ BLEU points and reducing latency by 60%. DeepL uses 28-layer Transformers for human-level translation quality."
+    },
+    {
+      "domain": "Language Modeling",
+      "application": "Foundation for GPT, BERT, T5, PaLM",
+      "description": "Decoder-only Transformers (GPT) predict next tokens. Encoder-only (BERT) do masked language modeling. Encoder-decoder (T5) handle any text-to-text task.",
+      "realWorldExample": "GPT-3/4, ChatGPT, Claude, Gemini—all based on Transformer architecture scaled to billions of parameters. BERT powers Google Search understanding since 2019."
+    },
+    {
+      "domain": "Computer Vision",
+      "application": "Vision Transformers (ViT)",
+      "description": "Split images into patches, treat as sequence of tokens. Pure Transformer can match or beat CNNs on image tasks when trained on sufficient data.",
+      "realWorldExample": "ViT-G/14 achieves 90.45% on ImageNet. DALL-E, Stable Diffusion, and Midjourney use Transformer-based diffusion models for image generation."
+    },
+    {
+      "domain": "Protein Folding",
+      "application": "AlphaFold 2",
+      "description": "Uses attention to model relationships between amino acids in 3D space. Revolutionized structural biology by predicting protein structures with atomic accuracy.",
+      "realWorldExample": "AlphaFold 2 solved the 50-year protein folding problem, predicted structures for 200M+ proteins. Won 2024 Nobel Prize in Chemistry."
+    },
+    {
+      "domain": "Code Generation",
+      "application": "GitHub Copilot, AlphaCode",
+      "description": "Transformer models trained on billions of lines of code. Generate functions, fix bugs, translate between languages.",
+      "realWorldExample": "GitHub Copilot (GPT-3 Codex) used by 1M+ developers. AlphaCode solves competitive programming problems at median human level."
+    },
+    {
+      "domain": "Speech Recognition",
+      "application": "Whisper, Conformer",
+      "description": "Transformers replace RNN-based ASR systems. Whisper achieves human-level accuracy on English speech and handles 99 languages.",
+      "realWorldExample": "OpenAI's Whisper processes 680,000 hours of speech. Google's USM (2023) supports 100+ languages with Transformer architecture."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "WMT14 EN-DE (Translation)",
+        "otherMetrics": {
+          "BLEU": "28.4 (2017 SOTA)",
+          "note": "Trained in 12 hours on 8 P100 GPUs"
+        }
+      },
+      {
+        "name": "WMT14 EN-FR (Translation)",
+        "otherMetrics": {
+          "BLEU": "41.8 (new SOTA)",
+          "note": "Single model, no ensembling"
+        }
+      },
+      {
+        "name": "ImageNet (ViT-Huge)",
+        "accuracy": 88.55,
+        "otherMetrics": {
+          "note": "Pure Transformer beats CNNs when pre-trained on large data"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Learning Rate Schedule",
+        "recommendedValue": "lrate = d_model^(-0.5) · min(step^(-0.5), step · warmup_steps^(-1.5))",
+        "rationale": "Warmup for 4000 steps, then decay. Critical for training stability. Without warmup, training often diverges."
+      },
+      {
+        "parameter": "Label Smoothing",
+        "recommendedValue": "ε = 0.1",
+        "rationale": "Prevents overconfident predictions. Improves generalization and BLEU scores by ~0.4 points."
+      },
+      {
+        "parameter": "Dropout",
+        "recommendedValue": "0.1 (base), 0.3 (big model)",
+        "rationale": "Applied to attention weights, residual connections, and embeddings. Higher for larger models."
+      },
+      {
+        "parameter": "Attention Dropout",
+        "recommendedValue": "0.1",
+        "rationale": "Dropout on attention weights prevents overfitting to specific positions."
+      },
+      {
+        "parameter": "Weight Initialization",
+        "recommendedValue": "Xavier/Glorot uniform",
+        "rationale": "Careful initialization crucial for deep models. Layer norm helps but init still matters."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Training diverges early",
+        "solution": "MUST use learning rate warmup. Start at 0, increase linearly for 4000 steps. Also check gradient clipping (max_norm=1.0)."
+      },
+      {
+        "problem": "Out of memory on long sequences",
+        "solution": "Quadratic memory in sequence length. Use gradient checkpointing, mixed precision (fp16), or efficient attention (Flash Attention 2). Reduce batch size or max_len."
+      },
+      {
+        "problem": "Poor performance on tasks requiring precise position",
+        "solution": "Sinusoidal PE may not encode position well enough. Try learned positional embeddings or relative positional encoding (T5, DeBERTa)."
+      }
+    ]
+  },
+  "comparisons": ["lstm", "gru", "bert", "gpt"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Attention Is All You Need",
+      "url": "https://arxiv.org/abs/1706.03762",
+      "description": "Original 2017 paper by Vaswani et al. (Google Brain)"
+    },
+    {
+      "type": "blog",
+      "title": "The Illustrated Transformer",
+      "url": "https://jalammar.github.io/illustrated-transformer/",
+      "description": "Best visual guide to understanding Transformers"
+    },
+    {
+      "type": "implementation",
+      "title": "Annotated Transformer",
+      "url": "http://nlp.seas.harvard.edu/annotated-transformer/",
+      "description": "Line-by-line PyTorch implementation with explanations"
+    }
+  ],
+  "tags": ["nlp", "attention", "self-attention", "transformer", "encoder-decoder", "parallel", "2017"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "8 GB (small models)",
+    "recommendedVRAM": "40 GB (A100 for training large models)",
+    "trainingTime": {
+      "gpu": "12 hours on 8 P100s for WMT14 EN-DE"
+    },
+    "storageRequirements": "~500 MB for base model weights"
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "_comment": "Template for adding new architectures - copy this file and fill in the details",
+
+  "id": "architecture-id-lowercase",
+  "name": "Architecture Display Name",
+  "category": "cnn | transformer | rnn | generative | autoencoder | gnn | reinforcement | energy-based | spiking | hybrid | self-supervised | feedforward",
+  "subcategory": "specific-subcategory",
+  "year": 2024,
+  "authors": ["Author One", "Author Two"],
+  "paper": "Paper Title",
+  "paperUrl": "https://arxiv.org/abs/xxxx.xxxxx",
+
+  "description": "Brief technical description of the architecture (2-3 sentences)",
+
+  "plainEnglish": "Explain the architecture as if talking to a beginner. Use analogies and simple language. What problem does it solve? How does it work conceptually?",
+
+  "keyInnovation": "What made this architecture revolutionary? What's the one key idea?",
+
+  "architecture": {
+    "layers": [
+      {
+        "type": "conv | maxpool | fc | attention | encoder | decoder | residual_block | etc",
+        "name": "Layer Display Name",
+        "params": {
+          "filters": 64,
+          "kernel_size": 3,
+          "stride": 1
+        },
+        "outputShape": [56, 56, 64],
+        "description": "Optional: what this layer does"
+      }
+    ],
+    "parameters": 25000000,
+    "depth": 50,
+    "inputShape": [224, 224, 3],
+    "outputShape": [1000]
+  },
+
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Main Equation Name",
+        "latex": "y = f(x)",
+        "description": "What this equation represents"
+      }
+    ],
+    "forwardPass": [
+      "Step 1: Description",
+      "Step 2: Description",
+      "Step 3: Description"
+    ],
+    "backpropagation": [
+      "Step 1: Compute gradients",
+      "Step 2: Backpropagate through layers"
+    ],
+    "lossFunction": "Cross-Entropy | MSE | etc"
+  },
+
+  "code": {
+    "pytorch": "import torch\\nimport torch.nn as nn\\n\\nclass MyModel(nn.Module):\\n    def __init__(self):\\n        super().__init__()\\n        # Define layers\\n    \\n    def forward(self, x):\\n        # Forward pass\\n        return x",
+
+    "tensorflow": "import tensorflow as tf\\nfrom tensorflow.keras import layers\\n\\ndef create_model():\\n    # Define model\\n    return model",
+
+    "jax": "import jax\\nimport jax.numpy as jnp\\n\\n# JAX implementation (optional)"
+  },
+
+  "useCases": [
+    {
+      "title": "Use Case 1",
+      "description": "Description of the use case",
+      "examples": [
+        "Example 1",
+        "Example 2",
+        "Example 3"
+      ],
+      "industry": "Computer Vision | NLP | etc"
+    }
+  ],
+
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "ImageNet",
+        "accuracy": 76.5,
+        "otherMetrics": {
+          "top5": 93.2
+        }
+      }
+    ],
+    "performance": {
+      "speed": "200ms per image on GPU",
+      "memory": "4GB GPU memory",
+      "accuracy": "76.5% top-1 on ImageNet"
+    }
+  },
+
+  "trainingTips": {
+    "hyperparameters": {
+      "learning_rate": 0.001,
+      "batch_size": 32,
+      "optimizer": "Adam",
+      "epochs": 100
+    },
+    "commonIssues": [
+      {
+        "problem": "Model not converging",
+        "solution": "Try reducing learning rate or adding learning rate warmup"
+      }
+    ],
+    "dataRequirements": "How much data is needed",
+    "trainingTime": "Estimated training time on standard hardware"
+  },
+
+  "comparisons": ["architecture-id-1", "architecture-id-2"],
+
+  "resources": [
+    {
+      "type": "paper | tutorial | implementation | video | blog",
+      "title": "Resource Title",
+      "url": "https://example.com",
+      "author": "Optional author name"
+    }
+  ],
+
+  "tags": ["tag1", "tag2", "tag3"],
+
+  "difficulty": "Beginner | Intermediate | Advanced",
+
+  "computationalRequirements": {
+    "minGPU": "NVIDIA GTX 1060",
+    "minRAM": "8GB",
+    "recommendedGPU": "NVIDIA RTX 3090",
+    "recommendedRAM": "32GB"
+  }
+}

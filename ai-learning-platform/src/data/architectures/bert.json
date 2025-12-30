@@ -1,0 +1,256 @@
+{
+  "id": "bert",
+  "name": "BERT (Bidirectional Encoder Representations from Transformers)",
+  "category": "transformer",
+  "subcategory": "Encoder-Only",
+  "year": 2018,
+  "authors": ["Jacob Devlin", "Ming-Wei Chang", "Kenton Lee", "Kristina Toutanova"],
+  "paper": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+  "paperUrl": "https://arxiv.org/abs/1810.04805",
+  "description": "BERT revolutionized NLP by introducing bidirectional pre-training using Masked Language Modeling (MLM). Unlike GPT which reads left-to-right, BERT sees the full context in both directions simultaneously. It's pre-trained on massive unlabeled text, then fine-tuned for specific tasks with minimal architecture changes. BERT sparked the 'pre-train then fine-tune' paradigm that dominates modern NLP and led to RoBERTa, ALBERT, DeBERTa, and influenced models across all domains.",
+  "plainEnglish": "Imagine learning English by reading books with random words blanked out, trying to guess them from context. That's how BERT trains! It takes sentences like 'The [MASK] sat on the mat' and learns to predict 'cat' by looking at words on BOTH sides (bidirectional). Traditional models read left-to-right and can only use past context. BERT's bidirectionality is its superpower—it understands 'bank' differently in 'river bank' vs 'bank account' by seeing surrounding words. After pre-training on Wikipedia + books, you can fine-tune BERT for ANY task (classification, Q&A, NER) by just adding a simple output layer. It's like teaching someone general language understanding, then specializing them for specific jobs.",
+  "keyInnovation": "Bidirectional pre-training via Masked Language Modeling (MLM): randomly mask 15% of tokens and predict them using context from both directions. This is combined with Next Sentence Prediction (NSP) to learn sentence relationships. The encoder-only architecture (no decoder) makes it ideal for understanding tasks rather than generation. BERT introduced the transfer learning paradigm to NLP: pre-train once on huge data, fine-tune for many tasks with little data. This democratized NLP—you don't need massive datasets for every task.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "embedding",
+        "name": "Token + Segment + Position Embeddings",
+        "description": "Sums three embeddings: WordPiece tokens, segment IDs (for sentence pairs), and learned positional embeddings",
+        "parameters": {
+          "vocab_size": 30522,
+          "d_model": 768,
+          "max_len": 512,
+          "type_vocab_size": 2
+        },
+        "parameterCount": 23835648
+      },
+      {
+        "type": "encoder",
+        "name": "Transformer Encoder Stack (12 layers)",
+        "description": "Each layer: Multi-Head Self-Attention (12 heads) → Add&Norm → FFN → Add&Norm",
+        "parameters": {
+          "num_layers": 12,
+          "d_model": 768,
+          "num_heads": 12,
+          "d_ff": 3072,
+          "dropout": 0.1
+        },
+        "parameterCount": 85054464
+      },
+      {
+        "type": "pooler",
+        "name": "Pooler (for classification)",
+        "description": "Takes [CLS] token representation and projects through tanh",
+        "parameters": {
+          "d_model": 768
+        },
+        "parameterCount": 590592
+      }
+    ],
+    "depth": 12,
+    "parameters": 109482240,
+    "flops": "Variable (depends on sequence length)",
+    "memoryFootprint": "~438 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Masked Language Modeling (MLM) Loss",
+        "latex": "\\mathcal{L}_{MLM} = -\\mathbb{E}_{\\mathbf{x}} \\sum_{i \\in \\text{masked}} \\log P(x_i | \\mathbf{x}_{\\setminus i})",
+        "explanation": "THE KEY TRAINING OBJECTIVE. Randomly mask 15% of tokens. Of these: 80% replaced with [MASK], 10% replaced with random token, 10% unchanged. Predict original tokens using bidirectional context. This forces the model to learn deep bidirectional representations.",
+        "variables": {
+          "x": "Input sequence",
+          "x_i": "Token at position i",
+          "x_{\\setminus i}": "All tokens except position i",
+          "masked": "Set of masked positions"
+        }
+      },
+      {
+        "name": "Next Sentence Prediction (NSP) Loss",
+        "latex": "\\mathcal{L}_{NSP} = -\\log P(\\text{IsNext} | [\\text{CLS}], \\text{Sent}_A, [\\text{SEP}], \\text{Sent}_B, [\\text{SEP}])",
+        "explanation": "Binary classification: are sentence B following sentence A from the same document (50% yes, 50% random sentence)? Uses [CLS] token representation. Helps with tasks requiring sentence relationship understanding (Q&A, NLI). Note: Later research (RoBERTa) found NSP less important than MLM.",
+        "variables": {
+          "[CLS]": "Special classification token (first position)",
+          "[SEP]": "Separator token between sentences"
+        }
+      },
+      {
+        "name": "Total Pre-training Loss",
+        "latex": "\\mathcal{L} = \\mathcal{L}_{MLM} + \\mathcal{L}_{NSP}",
+        "explanation": "Joint training on both objectives. MLM teaches language understanding, NSP teaches sentence relationships.",
+        "variables": {}
+      },
+      {
+        "name": "Input Representation",
+        "latex": "\\mathbf{h}_0 = \\text{TokenEmb}(x) + \\text{SegmentEmb}(s) + \\text{PosEmb}(p)",
+        "explanation": "Three embeddings summed: (1) Token embeddings from WordPiece vocabulary, (2) Segment embeddings (0 for sentence A, 1 for sentence B), (3) Learned positional embeddings (not sinusoidal like vanilla Transformer).",
+        "variables": {
+          "x": "Token IDs",
+          "s": "Segment IDs (0 or 1)",
+          "p": "Position IDs (0 to 511)"
+        }
+      },
+      {
+        "name": "Fine-tuning",
+        "latex": "\\mathbf{y} = \\text{softmax}(\\mathbf{W} \\cdot \\mathbf{h}_{[\\text{CLS}]} + \\mathbf{b})",
+        "explanation": "For classification tasks, take the [CLS] token's final hidden state and add a task-specific linear layer. Fine-tune all BERT parameters end-to-end with small learning rate.",
+        "variables": {
+          "h_{[CLS]}": "Final hidden state of [CLS] token",
+          "W, b": "Task-specific parameters"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Bidirectionality Matters",
+        "statement": "Bidirectional pre-training significantly outperforms left-to-right pre-training on 11 NLP tasks. BERT-Base beats GPT (same size) by 4-7% on GLUE benchmark.",
+        "significance": "Demonstrated that seeing full context (vs autoregressive) is crucial for understanding tasks. But this means BERT can't generate text naturally."
+      },
+      {
+        "name": "Scale and Data",
+        "statement": "Pre-training on 3.3B words (Wikipedia + BookCorpus) for 1M steps enables strong transfer to tasks with <10K examples.",
+        "significance": "Showed that massive unsupervised pre-training transfers well to supervised tasks, even with little task-specific data."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "from transformers import BertModel, BertTokenizer, BertForSequenceClassification\nimport torch\n\n# Pre-trained BERT\nmodel = BertModel.from_pretrained('bert-base-uncased')\ntokenizer = BertTokenizer.from_pretrained('bert-base-uncased')\n\n# Encode text\ntext = \"BERT is a powerful language model.\"\ninputs = tokenizer(text, return_tensors='pt', padding=True, truncation=True)\n\n# Get contextual embeddings\nwith torch.no_grad():\n    outputs = model(**inputs)\n    last_hidden = outputs.last_hidden_state  # (batch, seq_len, 768)\n    pooled = outputs.pooler_output  # (batch, 768) - [CLS] representation\n\nprint(f'Hidden states shape: {last_hidden.shape}')\nprint(f'Pooled output shape: {pooled.shape}')\n\n# Fine-tuning example\nclassifier = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=2)\noutput = classifier(**inputs)\nlogits = output.logits  # (batch, num_labels)\nprint(f'Classification logits: {logits.shape}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Search Engines",
+      "application": "Query understanding and document ranking",
+      "description": "BERT understands search intent better than keyword matching. Handles long-tail queries, question-based searches, and nuanced meaning.",
+      "realWorldExample": "Google Search uses BERT for understanding 1 in 10 English queries (as of 2019). Bing uses it for ranking. Improved relevance for conversational and question-based searches by 10%+."
+    },
+    {
+      "domain": "Question Answering",
+      "application": "Reading comprehension (SQuAD, Natural Questions)",
+      "description": "Given a passage and question, BERT extracts the answer span. Fine-tune by predicting start and end positions.",
+      "realWorldExample": "BERT achieved 93.2 F1 on SQuAD 1.1 (surpassing human performance of 91.2). Used in chatbots, customer support systems, and virtual assistants."
+    },
+    {
+      "domain": "Sentiment Analysis",
+      "application": "Text classification for sentiment, topics, intent",
+      "description": "Fine-tune BERT with a classification head. Achieves SOTA on many benchmarks with minimal training data.",
+      "realWorldExample": "Used by social media platforms for content moderation, brand monitoring. Achieves 94%+ accuracy on IMDb sentiment with just 25K training examples."
+    },
+    {
+      "domain": "Named Entity Recognition",
+      "application": "Extract entities (people, places, organizations)",
+      "description": "Token-level classification using BERT's contextual embeddings. Better than CRF/LSTM approaches.",
+      "realWorldExample": "spaCy's transformer models use BERT. Used in healthcare for extracting medical entities from clinical notes, legal tech for contract analysis."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "GLUE Benchmark (avg of 9 tasks)",
+        "accuracy": 80.5,
+        "otherMetrics": {
+          "note": "BERT-Base. BERT-Large: 82.1 (previous SOTA: 75.1)"
+        }
+      },
+      {
+        "name": "SQuAD 1.1 (Question Answering)",
+        "otherMetrics": {
+          "F1": "93.2 (BERT-Large)",
+          "EM": "86.9",
+          "note": "Exceeds human performance (F1: 91.2)"
+        }
+      },
+      {
+        "name": "SQuAD 2.0",
+        "otherMetrics": {
+          "F1": "83.1",
+          "note": "Includes unanswerable questions"
+        }
+      },
+      {
+        "name": "SWAG (Commonsense Reasoning)",
+        "accuracy": 86.3,
+        "otherMetrics": {
+          "note": "BERT-Large. Human: 88"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Pre-training Batch Size",
+        "recommendedValue": "256 sequences",
+        "rationale": "Large batches stabilize training. Use gradient accumulation if memory-limited."
+      },
+      {
+        "parameter": "Pre-training Learning Rate",
+        "recommendedValue": "1e-4 with linear warmup over first 10K steps",
+        "rationale": "AdamW optimizer with warmup critical. Decay to 0 over 1M steps."
+      },
+      {
+        "parameter": "Fine-tuning Learning Rate",
+        "recommendedValue": "2e-5, 3e-5, or 5e-5",
+        "rationale": "Small LR prevents catastrophic forgetting. Try all three on your validation set. BERT is sensitive to this!"
+      },
+      {
+        "parameter": "Fine-tuning Epochs",
+        "recommendedValue": "3-4 epochs",
+        "rationale": "Small datasets: 3-4 epochs. Large datasets: 2-3 epochs. More can overfit."
+      },
+      {
+        "parameter": "Masking Strategy",
+        "recommendedValue": "80% [MASK], 10% random, 10% unchanged",
+        "rationale": "Prevents model from relying solely on [MASK] token. Improves robustness."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Catastrophic forgetting during fine-tuning",
+        "solution": "Use small learning rate (2e-5), few epochs (3-4), gradual unfreezing, or adapter layers (LoRA, AdapterHub)."
+      },
+      {
+        "problem": "Poor performance on domain-specific tasks",
+        "solution": "Continue pre-training on domain data before fine-tuning (e.g., BioBERT for medical, FinBERT for finance)."
+      },
+      {
+        "problem": "Out of memory during fine-tuning",
+        "solution": "Reduce batch size, use gradient accumulation, freeze lower layers, or use distilled models (DistilBERT: 40% smaller, 97% performance)."
+      }
+    ]
+  },
+  "comparisons": ["transformer", "gpt", "roberta", "electra"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers",
+      "url": "https://arxiv.org/abs/1810.04805",
+      "description": "Original 2018 paper by Devlin et al. (Google AI)"
+    },
+    {
+      "type": "implementation",
+      "title": "Hugging Face Transformers",
+      "url": "https://huggingface.co/docs/transformers/model_doc/bert",
+      "description": "Most popular BERT implementation with 1000+ pre-trained models"
+    },
+    {
+      "type": "blog",
+      "title": "The Illustrated BERT",
+      "url": "https://jalammar.github.io/illustrated-bert/",
+      "description": "Visual guide to BERT's architecture and training"
+    }
+  ],
+  "tags": ["nlp", "bert", "transformer", "encoder", "bidirectional", "pre-training", "transfer-learning", "2018"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (fine-tuning BERT-Base with small batches)",
+    "recommendedVRAM": "16 GB (BERT-Base), 32 GB (BERT-Large)",
+    "trainingTime": {
+      "gpu": "Pre-training BERT-Base: 4 days on 16 TPU pods. Fine-tuning: 20 min to 1 hour on single GPU"
+    },
+    "storageRequirements": "~440 MB (BERT-Base), ~1.3 GB (BERT-Large)"
+  }
+}

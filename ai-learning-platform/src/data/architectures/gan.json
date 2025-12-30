@@ -1,0 +1,237 @@
+{
+  "id": "gan",
+  "name": "GAN (Generative Adversarial Network)",
+  "category": "generative",
+  "subcategory": "Adversarial",
+  "year": 2014,
+  "authors": ["Ian Goodfellow", "Jean Pouget-Abadie", "Mehdi Mirza", "Bing Xu", "David Warde-Farley", "Sherjil Ozair", "Aaron Courville", "Yoshua Bengio"],
+  "paper": "Generative Adversarial Networks",
+  "paperUrl": "https://arxiv.org/abs/1406.2661",
+  "description": "GANs revolutionized generative modeling through adversarial training: two neural networks compete in a zero-sum game. The Generator creates fake samples from random noise, trying to fool the Discriminator. The Discriminator learns to distinguish real from fake. This adversarial process drives both networks to improve—the Generator produces increasingly realistic samples, while the Discriminator becomes a better critic. Unlike VAEs which model probability explicitly, GANs learn implicitly through game theory. The result: remarkably sharp, high-quality generated images that surpass VAEs. GANs sparked a revolution in image synthesis, leading to photorealistic face generation (StyleGAN), image-to-image translation (Pix2Pix), and video synthesis.",
+  "plainEnglish": "Imagine an art forger (Generator) and an art detective (Discriminator) competing. The forger starts terrible—creates obvious fakes. The detective easily spots them. But with each round, the forger improves, learning what makes art look real. The detective also improves, becoming more critical. This arms race continues until the forger creates perfect fakes that even experts can't distinguish from real art! That's GAN training. Generator input: random noise z (like rolling dice). Output: fake image. Discriminator input: mix of real images and Generator fakes. Output: probability it's real. Loss: Generator wants Discriminator to think fakes are real (fool it). Discriminator wants to classify correctly. The equilibrium: Generator produces realistic samples, Discriminator can't tell difference (outputs 50% for everything).",
+  "keyInnovation": "Adversarial training framework: instead of explicit likelihood, learn via competition. The Generator never sees real data directly—only gradient feedback from Discriminator. This indirect learning produces sharper samples than maximum likelihood methods (no averaging blur). Game theory foundation: minimax objective finds Nash equilibrium. GANs can generate discrete data (text via Gumbel-Softmax), continuous data (images), and structured data (molecules). Extensions: DCGAN adds convolutions, WGAN stabilizes training, StyleGAN enables control, Progressive GAN generates high-res images. Influence beyond generation: adversarial training used in robust ML, domain adaptation, privacy.",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [28, 28, 1],
+    "layers": [
+      {
+        "type": "generator",
+        "name": "Generator Network",
+        "description": "Maps random noise z ~ N(0,1) to fake images",
+        "parameters": {
+          "latent_dim": 100,
+          "hidden_layers": [256, 512, 1024],
+          "output_shape": [28, 28, 1],
+          "activation": "relu",
+          "output_activation": "tanh"
+        },
+        "parameterCount": 1493504
+      },
+      {
+        "type": "discriminator",
+        "name": "Discriminator Network",
+        "description": "Binary classifier: real (1) or fake (0)",
+        "parameters": {
+          "input_shape": [28, 28, 1],
+          "hidden_layers": [512, 256],
+          "output": 1,
+          "activation": "leaky_relu",
+          "output_activation": "sigmoid"
+        },
+        "parameterCount": 1121281
+      }
+    ],
+    "depth": 6,
+    "parameters": 2614785,
+    "flops": "~5M per sample",
+    "memoryFootprint": "~10 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Minimax Objective",
+        "latex": "\\min_G \\max_D \\mathbb{E}_{x \\sim p_{data}}[\\log D(x)] + \\mathbb{E}_{z \\sim p_z}[\\log(1 - D(G(z)))]",
+        "explanation": "THE CORE. Discriminator D maximizes: correctly classify real (log D(x) → 0) and fake (log(1-D(G(z))) → 0). Generator G minimizes: fool D so D(G(z)) → 1, making log(1-D(G(z))) → -∞. This is a two-player zero-sum game. At equilibrium (Nash): D(x) = 0.5 everywhere, G samples from p_data.",
+        "variables": {
+          "D(x)": "Discriminator output on real data (0 to 1)",
+          "D(G(z))": "Discriminator output on fake data",
+          "p_data": "True data distribution",
+          "p_z": "Prior distribution (usually N(0,1))"
+        }
+      },
+      {
+        "name": "Generator Loss (Non-saturating)",
+        "latex": "\\mathcal{L}_G = -\\mathbb{E}_{z \\sim p_z}[\\log D(G(z))]",
+        "explanation": "In practice, minimizing log(1-D(G(z))) saturates early (vanishing gradients when D is confident fakes are fake). Instead, maximize log D(G(z))—same equilibrium, better gradients. Generator wants D(fake) = 1.",
+        "variables": {
+          "G(z)": "Generated sample from noise z"
+        }
+      },
+      {
+        "name": "Discriminator Loss (Binary Cross-Entropy)",
+        "latex": "\\mathcal{L}_D = -\\mathbb{E}_{x \\sim p_{data}}[\\log D(x)] - \\mathbb{E}_{z \\sim p_z}[\\log(1 - D(G(z)))]",
+        "explanation": "Standard binary classification loss. First term: maximize for real samples. Second term: maximize for fakes. Discriminator tries to output D(real)=1, D(fake)=0.",
+        "variables": {
+          "x": "Real sample",
+          "G(z)": "Fake sample"
+        }
+      },
+      {
+        "name": "Nash Equilibrium Condition",
+        "latex": "D^*(x) = \\frac{p_{data}(x)}{p_{data}(x) + p_g(x)}",
+        "explanation": "At optimal discriminator, output is ratio of densities. When G is optimal (p_g = p_data), D*(x) = 0.5 everywhere. This is theoretical equilibrium—hard to reach in practice due to mode collapse and training instability.",
+        "variables": {
+          "p_data": "True data density",
+          "p_g": "Generator's learned density"
+        }
+      },
+      {
+        "name": "Jensen-Shannon Divergence",
+        "latex": "\\text{JSD}(p_{data} || p_g) = \\frac{1}{2}\\text{KL}(p_{data} || \\frac{p_{data}+p_g}{2}) + \\frac{1}{2}\\text{KL}(p_g || \\frac{p_{data}+p_g}{2})",
+        "explanation": "Minimizing GAN objective is equivalent to minimizing JSD between real and fake distributions. JSD is symmetric (unlike KL) and bounded. This explains why GANs work but also why they're unstable (JSD isn't smooth when supports don't overlap).",
+        "variables": {
+          "KL": "Kullback-Leibler divergence",
+          "JSD": "Jensen-Shannon divergence"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Global Optimality",
+        "statement": "For fixed G, optimal D is D*(x) = p_data(x)/(p_data(x)+p_g(x)). When both are optimal, p_g = p_data.",
+        "significance": "Theoretical guarantee that GAN can recover true distribution. In practice, reaching this equilibrium is challenging due to mode collapse and instability."
+      },
+      {
+        "name": "Mode Collapse",
+        "statement": "Generator may collapse to producing limited variety of samples (modes) even if they fool discriminator.",
+        "significance": "Major GAN failure mode. Generator finds a few samples that always fool D, ignores rest of distribution. Mitigations: minibatch discrimination, unrolled optimization, Wasserstein loss."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.optim as optim\n\nclass Generator(nn.Module):\n    def __init__(self, latent_dim=100, img_shape=(1,28,28)):\n        super().__init__()\n        self.img_shape = img_shape\n        \n        self.model = nn.Sequential(\n            nn.Linear(latent_dim, 256),\n            nn.LeakyReLU(0.2),\n            nn.Linear(256, 512),\n            nn.LeakyReLU(0.2),\n            nn.Linear(512, 1024),\n            nn.LeakyReLU(0.2),\n            nn.Linear(1024, int(torch.prod(torch.tensor(img_shape)))),\n            nn.Tanh()  # Output in [-1, 1]\n        )\n    \n    def forward(self, z):\n        img = self.model(z)\n        return img.view(img.size(0), *self.img_shape)\n\nclass Discriminator(nn.Module):\n    def __init__(self, img_shape=(1,28,28)):\n        super().__init__()\n        \n        self.model = nn.Sequential(\n            nn.Flatten(),\n            nn.Linear(int(torch.prod(torch.tensor(img_shape))), 512),\n            nn.LeakyReLU(0.2),\n            nn.Dropout(0.3),\n            nn.Linear(512, 256),\n            nn.LeakyReLU(0.2),\n            nn.Dropout(0.3),\n            nn.Linear(256, 1),\n            nn.Sigmoid()\n        )\n    \n    def forward(self, img):\n        return self.model(img)\n\n# Training loop\nlatent_dim = 100\ngenerator = Generator(latent_dim)\ndiscriminator = Discriminator()\n\ncriterion = nn.BCELoss()\noptimizer_G = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))\noptimizer_D = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))\n\nfor epoch in range(200):\n    for real_imgs in dataloader:\n        batch_size = real_imgs.size(0)\n        \n        # Real and fake labels\n        real_labels = torch.ones(batch_size, 1)\n        fake_labels = torch.zeros(batch_size, 1)\n        \n        # Train Discriminator\n        optimizer_D.zero_grad()\n        \n        # Real images\n        real_loss = criterion(discriminator(real_imgs), real_labels)\n        \n        # Fake images\n        z = torch.randn(batch_size, latent_dim)\n        fake_imgs = generator(z)\n        fake_loss = criterion(discriminator(fake_imgs.detach()), fake_labels)\n        \n        d_loss = real_loss + fake_loss\n        d_loss.backward()\n        optimizer_D.step()\n        \n        # Train Generator\n        optimizer_G.zero_grad()\n        \n        gen_loss = criterion(discriminator(fake_imgs), real_labels)  # Want D to think they're real\n        gen_loss.backward()\n        optimizer_G.step()\n    \n    print(f'Epoch {epoch}: D_loss={d_loss.item():.4f}, G_loss={gen_loss.item():.4f}')\n\n# Generate samples\nwith torch.no_grad():\n    z = torch.randn(64, latent_dim)\n    samples = generator(z)"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Face Generation",
+      "application": "Photorealistic human face synthesis",
+      "description": "StyleGAN generates 1024×1024 faces indistinguishable from photos. Control attributes: age, gender, expression, lighting. Used in entertainment, privacy (synthetic identities), data augmentation.",
+      "realWorldExample": "ThisPersonDoesNotExist.com (StyleGAN2) generates unlimited synthetic faces. Used in movies/games for crowd scenes. Nvidia's StyleGAN3: 4K faces with perfect temporal consistency for video."
+    },
+    {
+      "domain": "Image-to-Image Translation",
+      "application": "Style transfer, super-resolution, colorization",
+      "description": "Pix2Pix, CycleGAN translate between image domains: sketch→photo, day→night, horse→zebra, low-res→high-res. No paired training data needed (CycleGAN).",
+      "realWorldExample": "DeOldify colorizes old black-and-white photos/films using GAN. Topaz Gigapixel AI upscales images 4-8× using GAN-based super-resolution. Adobe uses GANs for content-aware fill."
+    },
+    {
+      "domain": "Data Augmentation",
+      "application": "Generate synthetic training data",
+      "description": "When real data is scarce/expensive, generate synthetic samples. Improves model robustness, addresses class imbalance, privacy-preserving (medical data).",
+      "realWorldExample": "Medical imaging: generate synthetic MRI scans for rare diseases. Autonomous driving: synthesize diverse weather/lighting conditions. Finance: generate synthetic transaction data for fraud detection."
+    },
+    {
+      "domain": "Text-to-Image Generation",
+      "application": "Generate images from text descriptions",
+      "description": "AttnGAN, StackGAN generate images from captions. Modern: DALL-E, Stable Diffusion (diffusion + GAN ideas), Midjourney.",
+      "realWorldExample": "DALL-E 2 generates photorealistic images from text (256M users). Stable Diffusion (open-source) enables AI art movement. Used in advertising, concept art, game asset creation."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MNIST",
+        "otherMetrics": {
+          "IS": "~9.5 (Inception Score)",
+          "note": "Basic GAN generates recognizable digits"
+        }
+      },
+      {
+        "name": "CIFAR-10",
+        "otherMetrics": {
+          "IS": "~8.5 (vanilla GAN), ~9.5 (DCGAN)",
+          "FID": "~25-30 (lower is better)",
+          "note": "DCGAN with convolutions performs best"
+        }
+      },
+      {
+        "name": "CelebA (Faces)",
+        "otherMetrics": {
+          "FID": "~5-10 (StyleGAN2)",
+          "note": "Near-photorealistic faces at 1024×1024"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.0001-0.0002 for both G and D",
+        "rationale": "Use Adam optimizer with β1=0.5, β2=0.999. Equal or slightly lower LR for G helps balance. Too high causes instability."
+      },
+      {
+        "parameter": "Batch Size",
+        "recommendedValue": "64-256",
+        "rationale": "Larger batches stabilize training. Small batches cause high variance gradients."
+      },
+      {
+        "parameter": "Label Smoothing",
+        "recommendedValue": "Real: 0.9, Fake: 0.1",
+        "rationale": "One-sided label smoothing (real=0.9 instead of 1.0) prevents D overconfidence, helps G gradients."
+      },
+      {
+        "parameter": "Discriminator Updates",
+        "recommendedValue": "1 D update per 1 G update (balanced)",
+        "rationale": "Conventional wisdom: train D more (k=5). Modern: balanced (k=1) often works better with good architecture/regularization."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Mode collapse (G produces same samples)",
+        "solution": "Use minibatch discrimination, Wasserstein loss (WGAN), Spectral Normalization, or increase diversity penalty. Check if D is too strong—reduce D capacity or updates."
+      },
+      {
+        "problem": "Training instability (loss oscillates wildly)",
+        "solution": "Use label smoothing, gradient penalty (WGAN-GP), Spectral Normalization. Reduce LR. Use LeakyReLU in D, avoid sparse gradients (ReLU in D causes dead neurons). Add noise to D inputs."
+      },
+      {
+        "problem": "Generator collapses early (only noise)",
+        "solution": "D is too weak. Increase D capacity or updates. Check G architecture—needs sufficient capacity. Ensure proper weight initialization. Try different random seeds."
+      }
+    ]
+  },
+  "comparisons": ["vae", "diffusion", "stylegan", "wgan"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Generative Adversarial Networks",
+      "url": "https://arxiv.org/abs/1406.2661",
+      "description": "Original 2014 GAN paper by Goodfellow et al."
+    },
+    {
+      "type": "paper",
+      "title": "Unsupervised Representation Learning with DCGAN",
+      "url": "https://arxiv.org/abs/1511.06434",
+      "description": "DCGAN: adding convolutions stabilized GAN training"
+    },
+    {
+      "type": "blog",
+      "title": "GAN Lab",
+      "url": "https://poloclub.github.io/ganlab/",
+      "description": "Interactive visualization of GAN training dynamics"
+    }
+  ],
+  "tags": ["gan", "generative", "adversarial", "synthesis", "2014"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (MNIST/CIFAR)",
+    "recommendedVRAM": "16 GB (high-res images)",
+    "trainingTime": {
+      "gpu": "2-4 hours for MNIST, 1-2 days for CelebA 256×256"
+    },
+    "storageRequirements": "~10-100 MB per model"
+  }
+}

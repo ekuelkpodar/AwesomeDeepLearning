@@ -1,0 +1,300 @@
+{
+  "id": "gcn",
+  "name": "GCN (Graph Convolutional Network)",
+  "category": "graph",
+  "subcategory": "Spectral",
+  "year": 2016,
+  "authors": ["Thomas N. Kipf", "Max Welling"],
+  "paper": "Semi-Supervised Classification with Graph Convolutional Networks",
+  "paperUrl": "https://arxiv.org/abs/1609.02907",
+  "description": "Graph Convolutional Networks extend convolutional neural networks to graph-structured data. Instead of operating on regular grids (images), GCNs operate on arbitrary graphs: social networks, molecules, knowledge graphs, citation networks. The key insight: learn node representations by aggregating features from neighbors. Each GCN layer applies a spectral convolution that smooths features across graph edges, weighted by the adjacency matrix. Unlike traditional CNNs with fixed receptive fields, GCNs adapt to graph topology—each node aggregates from its unique neighborhood. GCN is semi-supervised: train on few labeled nodes, leverage graph structure to propagate labels. Foundation for modern graph learning: simple, efficient, and effective for node classification, link prediction, and graph classification.",
+  "plainEnglish": "Imagine a social network: you want to classify users (bot vs human) but only have labels for 5% of users. Traditional ML: treat each user independently (ignores connections). GCN solution: leverage friendships! If your friends are bots, you're likely a bot. Each GCN layer: (1) Aggregate neighbors' features. (2) Apply transformation. (3) Normalize by degree. Repeat for L layers → each node sees L-hop neighborhood. Math: H^(l+1) = σ(D̃^(-1/2) Ã D̃^(-1/2) H^(l) W^(l)), where Ã is adjacency + self-loops, D̃ is degree matrix. This normalizes by sqrt(degree)—prevents high-degree nodes from dominating. After training on few labeled nodes, unlabeled nodes get features from neighbors → semi-supervised learning! Result: 80-90% accuracy with just 5% labels on citation networks. Applications: molecule property prediction (atoms = nodes, bonds = edges), recommender systems (users/items = nodes), knowledge graph reasoning, fraud detection.",
+  "keyInnovation": "Spectral graph convolution via localized first-order approximation. Original spectral methods (Bruna 2013) used graph Fourier transform—expensive O(n³) eigendecomposition. Kipf & Welling: approximate spectral convolution with 1-hop localized filter. Result: efficient O(|E|) complexity (linear in edges). Renormalization trick: Ã = A + I (add self-loops) and D̃^(-1/2) Ã D̃^(-1/2) (symmetric normalization). Prevents vanishing/exploding gradients across layers. Layer-wise propagation model: each layer aggregates from immediate neighbors. Stack L layers → L-hop receptive field. Semi-supervised learning: train on labeled nodes, graph structure regularizes embeddings. Message passing interpretation: each node receives 'messages' (features) from neighbors, combines them. Foundation for Graph Neural Network frameworks (PyTorch Geometric, DGL). Limitation: over-smoothing (features become identical after many layers). Solutions: residual connections, adaptive layer depth, or attention (GAT).",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "graph_conv",
+        "name": "Graph Convolutional Layer",
+        "description": "Aggregates features from neighbors with symmetric normalization. H^(l+1) = σ(D̃^(-1/2) Ã D̃^(-1/2) H^(l) W^(l))",
+        "parameters": {
+          "in_features": 128,
+          "out_features": 64,
+          "use_bias": true,
+          "add_self_loops": true,
+          "normalize": true
+        },
+        "parameterCount": 8256
+      },
+      {
+        "type": "graph_conv",
+        "name": "Second GCN Layer",
+        "description": "Stacks another layer for 2-hop neighborhood aggregation",
+        "parameters": {
+          "in_features": 64,
+          "out_features": 32,
+          "use_bias": true,
+          "add_self_loops": true,
+          "normalize": true
+        },
+        "parameterCount": 2080
+      },
+      {
+        "type": "graph_conv",
+        "name": "Output Layer",
+        "description": "Final classification layer (e.g., 7 classes for citation networks)",
+        "parameters": {
+          "in_features": 32,
+          "out_features": 7,
+          "use_bias": true,
+          "add_self_loops": true,
+          "normalize": false
+        },
+        "parameterCount": 231
+      }
+    ],
+    "depth": 3,
+    "parameters": 10567,
+    "flops": "~|E| × d_in × d_out per layer",
+    "memoryFootprint": "~40 KB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Graph Convolution (GCN Layer)",
+        "latex": "H^{(l+1)} = \\sigma\\left(\\tilde{D}^{-1/2} \\tilde{A} \\tilde{D}^{-1/2} H^{(l)} W^{(l)}\\right)",
+        "explanation": "THE CORE. Propagate features across graph edges with symmetric normalization. H^(l) is node features at layer l (n×d matrix). W^(l) is learnable weight (d×d'). Ã = A + I adds self-loops (nodes aggregate from themselves + neighbors). D̃ is degree matrix of Ã. D̃^(-1/2) Ã D̃^(-1/2) is symmetric normalization—prevents high-degree nodes from dominating. σ is activation (ReLU). Result: each node's new features = weighted average of neighbor features, transformed by W.",
+        "variables": {
+          "H^(l)": "Node features at layer l (n × d_l)",
+          "W^(l)": "Learnable weight matrix (d_l × d_{l+1})",
+          "Ã": "A + I (adjacency + self-loops)",
+          "D̃": "Degree matrix of Ã (diagonal)",
+          "σ": "Activation function (typically ReLU)"
+        }
+      },
+      {
+        "name": "Symmetric Normalization",
+        "latex": "\\hat{A} = \\tilde{D}^{-1/2} \\tilde{A} \\tilde{D}^{-1/2}",
+        "explanation": "Normalize adjacency matrix by node degrees (sqrt). For edge (i,j): Â_ij = A_ij / sqrt(deg(i) × deg(j)). Prevents high-degree nodes from having disproportionate influence. Symmetric: Â = Â^T. Preserves graph structure while enabling stable training. Alternative: row normalization D̃^(-1) Ã (used in GraphSAGE), but symmetric works better for GCN.",
+        "variables": {
+          "D̃_ii": "Degree of node i in Ã (including self-loop)",
+          "Â_ij": "Normalized adjacency entry"
+        }
+      },
+      {
+        "name": "Forward Propagation (Full Model)",
+        "latex": "Z = \\text{softmax}\\left(\\hat{A} \\, \\text{ReLU}\\left(\\hat{A} X W^{(0)}\\right) W^{(1)}\\right)",
+        "explanation": "Two-layer GCN for classification. X is input features (n × d). First layer: aggregate neighbors, apply ReLU. Second layer: aggregate again, apply softmax. Â is precomputed (constant during training). Only W^(0) and W^(1) are learned. Training: cross-entropy loss on labeled nodes. Unlabeled nodes contribute to forward pass (their features propagate) but not to loss.",
+        "variables": {
+          "X": "Input node features (n × d)",
+          "W^(0)": "First layer weights (d × hidden)",
+          "W^(1)": "Second layer weights (hidden × classes)",
+          "Z": "Output logits (n × classes)"
+        }
+      },
+      {
+        "name": "Semi-Supervised Loss",
+        "latex": "\\mathcal{L} = -\\sum_{i \\in \\mathcal{Y}_L} \\sum_{c=1}^{C} Y_{ic} \\log Z_{ic}",
+        "explanation": "Cross-entropy loss ONLY on labeled nodes Y_L. Unlabeled nodes participate in forward pass (via graph structure) but don't contribute to loss. This is semi-supervised learning: graph regularizes embeddings. Few labels (5-20% of nodes) sufficient due to homophily (connected nodes have similar labels).",
+        "variables": {
+          "Y_L": "Set of labeled nodes (e.g., 5% of total)",
+          "Y_ic": "One-hot label (1 if node i has class c)",
+          "Z_ic": "Predicted probability for node i, class c",
+          "C": "Number of classes"
+        }
+      },
+      {
+        "name": "Spectral Interpretation (Laplacian)",
+        "latex": "L = I_n - D^{-1/2} A D^{-1/2}, \\quad H^{(l+1)} = \\sigma\\left((I_n - L) H^{(l)} W^{(l)}\\right)",
+        "explanation": "GCN is first-order approximation of spectral graph convolution. L is normalized graph Laplacian (measures graph smoothness). (I - L) ≈ D̃^(-1/2) Ã D̃^(-1/2) when A+I used. Spectral view: GCN applies low-pass filter in graph frequency domain (smooths features across connected nodes). This explains why GCN works: homophily assumption (connected nodes similar).",
+        "variables": {
+          "L": "Normalized graph Laplacian",
+          "I_n": "Identity matrix (self-loops)"
+        }
+      },
+      {
+        "name": "Computational Complexity",
+        "latex": "\\mathcal{O}(|E| \\cdot d^{(l)} \\cdot d^{(l+1)})",
+        "explanation": "Sparse matrix multiplication. |E| is number of edges. d^(l) and d^(l+1) are feature dimensions. For sparse graphs (|E| ~ n), this is O(n × d²)—linear in nodes! Much faster than fully connected layers O(n² × d²). Bottleneck: preprocessing Â (compute D̃^(-1/2) Ã D̃^(-1/2))—done once. Minibatch training: sample subgraphs or use neighbor sampling (GraphSAGE).",
+        "variables": {
+          "|E|": "Number of edges",
+          "d^(l)": "Input feature dimension",
+          "d^(l+1)": "Output feature dimension"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Spectral Convolution Approximation",
+        "statement": "GCN layer is first-order Chebyshev approximation of spectral graph convolution with filters localized to 1-hop neighborhood.",
+        "significance": "Theoretical foundation. Connects GCN to spectral graph theory. Explains efficiency: no expensive eigendecomposition, only sparse matrix multiplication."
+      },
+      {
+        "name": "Over-Smoothing Problem",
+        "statement": "As depth L → ∞, node representations converge to same value (all nodes become indistinguishable). Limit: h_i → c for all i.",
+        "significance": "Fundamental limitation of GCNs. Deep GCNs (>3-4 layers) perform worse. Mitigation: residual connections, jumping knowledge networks, or attention mechanisms (GAT)."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass GCNLayer(nn.Module):\n    def __init__(self, in_features, out_features):\n        super().__init__()\n        self.linear = nn.Linear(in_features, out_features)\n    \n    def forward(self, X, A_hat):\n        # X: node features (n × in_features)\n        # A_hat: normalized adjacency (n × n)\n        return self.linear(torch.mm(A_hat, X))\n\nclass GCN(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim):\n        super().__init__()\n        self.conv1 = GCNLayer(input_dim, hidden_dim)\n        self.conv2 = GCNLayer(hidden_dim, output_dim)\n    \n    def forward(self, X, A_hat):\n        # First layer\n        H = self.conv1(X, A_hat)\n        H = F.relu(H)\n        H = F.dropout(H, p=0.5, training=self.training)\n        \n        # Second layer\n        H = self.conv2(H, A_hat)\n        return F.log_softmax(H, dim=1)\n\n# Preprocess adjacency matrix\ndef preprocess_adj(A):\n    # A: adjacency matrix (scipy sparse or torch tensor)\n    # Add self-loops\n    A_tilde = A + torch.eye(A.size(0))\n    \n    # Compute D_tilde^(-1/2)\n    D_tilde = torch.diag(A_tilde.sum(dim=1))\n    D_tilde_inv_sqrt = torch.pow(D_tilde, -0.5)\n    D_tilde_inv_sqrt[torch.isinf(D_tilde_inv_sqrt)] = 0.\n    \n    # Symmetric normalization\n    A_hat = torch.mm(torch.mm(D_tilde_inv_sqrt, A_tilde), D_tilde_inv_sqrt)\n    return A_hat\n\n# Training\nmodel = GCN(input_dim=1433, hidden_dim=16, output_dim=7)  # Cora dataset\noptimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)\n\n# Assume we have:\n# X: node features (2708 × 1433)\n# A: adjacency matrix (2708 × 2708)\n# labels: node labels (2708,)\n# idx_train: indices of labeled nodes\n\nA_hat = preprocess_adj(A)  # Precompute normalized adjacency\n\nfor epoch in range(200):\n    model.train()\n    optimizer.zero_grad()\n    \n    # Forward pass\n    output = model(X, A_hat)\n    \n    # Loss only on labeled nodes\n    loss = F.nll_loss(output[idx_train], labels[idx_train])\n    \n    loss.backward()\n    optimizer.step()\n    \n    if epoch % 10 == 0:\n        print(f'Epoch {epoch}, Loss: {loss.item():.4f}')\n\n# Evaluation\nmodel.eval()\nwith torch.no_grad():\n    output = model(X, A_hat)\n    pred = output.argmax(dim=1)\n    acc = (pred[idx_test] == labels[idx_test]).float().mean()\n    print(f'Test Accuracy: {acc.item():.4f}')\n\n# Using PyTorch Geometric (cleaner API)\nimport torch_geometric.nn as geom_nn\nfrom torch_geometric.data import Data\n\nclass GCN_PyG(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim):\n        super().__init__()\n        self.conv1 = geom_nn.GCNConv(input_dim, hidden_dim)\n        self.conv2 = geom_nn.GCNConv(hidden_dim, output_dim)\n    \n    def forward(self, data):\n        x, edge_index = data.x, data.edge_index\n        \n        x = self.conv1(x, edge_index)\n        x = F.relu(x)\n        x = F.dropout(x, p=0.5, training=self.training)\n        \n        x = self.conv2(x, edge_index)\n        return F.log_softmax(x, dim=1)\n\n# Create PyG data object\ndata = Data(x=X, edge_index=edge_index, y=labels)\nmodel_pyg = GCN_PyG(1433, 16, 7)\noptimizer = torch.optim.Adam(model_pyg.parameters(), lr=0.01, weight_decay=5e-4)\n\nfor epoch in range(200):\n    model_pyg.train()\n    optimizer.zero_grad()\n    out = model_pyg(data)\n    loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])\n    loss.backward()\n    optimizer.step()"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Citation Networks",
+      "application": "Document classification in academic networks",
+      "description": "Classify research papers (e.g., ML, NLP, CV) using paper features (bag-of-words) and citations (edges). GCN leverages citation graph structure: papers citing each other likely belong to same field. Semi-supervised: label few papers, propagate through citations.",
+      "realWorldExample": "Cora dataset (2708 papers, 7 classes): GCN achieves ~81% accuracy with only 5% labeled (vs ~57% without graph). Used in: Google Scholar topic classification, arXiv categorization, research trend analysis."
+    },
+    {
+      "domain": "Social Network Analysis",
+      "application": "User classification, community detection, influence prediction",
+      "description": "Classify users (bot detection, interest prediction, demographics) using profile features and friendships. Homophily: friends share similar attributes. GCN propagates labels through network, detects communities, predicts missing attributes.",
+      "realWorldExample": "Twitter bot detection: GCN analyzes tweet features + follower graph. Achieves 95%+ accuracy. Facebook friend recommendation: GCN on user-user graph + features. LinkedIn skill endorsement prediction."
+    },
+    {
+      "domain": "Molecular Property Prediction",
+      "application": "Drug discovery, toxicity prediction, molecule generation",
+      "description": "Molecules as graphs: atoms = nodes, bonds = edges. Node features: atom type, charge, hybridization. Edge features: bond type (single/double/triple). GCN predicts molecular properties: solubility, toxicity, binding affinity. Graph convolutions capture chemical structure.",
+      "realWorldExample": "QM9 dataset (130k molecules): GCN predicts quantum properties. Used in drug discovery (Insilico Medicine, Atomwise). Google's AlphaFold uses graph networks for protein structure prediction. Molecule generation: conditional GCNs generate novel drugs."
+    },
+    {
+      "domain": "Knowledge Graph Reasoning",
+      "application": "Link prediction, entity classification, question answering",
+      "description": "Knowledge graphs (Freebase, Wikidata): entities = nodes, relations = edges. GCN learns entity embeddings by aggregating from neighbors. Tasks: predict missing links (Obama, born_in, ?), classify entities (is_person, is_location), answer queries.",
+      "realWorldExample": "Google Knowledge Graph: billions of entities and relations. GCN-based models (R-GCN, CompGCN) improve question answering. Amazon product graph: recommend items via GCN on user-item-attribute graph. Medical knowledge graphs for diagnosis."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Cora (Citation Network)",
+        "otherMetrics": {
+          "Nodes": "2,708 papers",
+          "Edges": "5,429 citations",
+          "Features": "1,433 (bag-of-words)",
+          "Classes": "7",
+          "Accuracy": "~81.5% (GCN, 5% labels)",
+          "note": "Classic benchmark for semi-supervised node classification"
+        }
+      },
+      {
+        "name": "PubMed (Citation Network)",
+        "otherMetrics": {
+          "Nodes": "19,717 papers",
+          "Edges": "44,338 citations",
+          "Classes": "3 (diabetes types)",
+          "Accuracy": "~79.0% (GCN)",
+          "note": "Larger citation network, medical domain"
+        }
+      },
+      {
+        "name": "Citeseer (Citation Network)",
+        "otherMetrics": {
+          "Nodes": "3,327 papers",
+          "Edges": "4,732 citations",
+          "Classes": "6",
+          "Accuracy": "~70.3% (GCN)",
+          "note": "More challenging than Cora due to sparser graph"
+        }
+      },
+      {
+        "name": "Reddit (Social Network)",
+        "otherMetrics": {
+          "Nodes": "232,965 posts",
+          "Edges": "11.6M connections",
+          "Classes": "41 communities",
+          "F1-Score": "~93.5% (GCN with sampling)",
+          "note": "Large-scale graph, requires minibatch training"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Number of Layers",
+        "recommendedValue": "2-3 layers",
+        "rationale": "More layers = larger receptive field but risk over-smoothing. 2 layers often optimal (sees 2-hop neighbors). 3-4 for larger graphs. Beyond 4: use residual connections or jumping knowledge."
+      },
+      {
+        "parameter": "Hidden Dimension",
+        "recommendedValue": "16-128",
+        "rationale": "Small graphs (Cora): 16-32 sufficient. Large graphs (Reddit): 64-128. Larger = more capacity but overfitting risk. Use dropout (0.5) to regularize."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.01 (Adam)",
+        "rationale": "Adam optimizer with lr=0.01 works well. Weight decay (L2 reg) = 5e-4 prevents overfitting. Lower lr (0.001) for large graphs."
+      },
+      {
+        "parameter": "Dropout",
+        "recommendedValue": "0.5",
+        "rationale": "Apply after each GCN layer (before activation). Prevents overfitting, especially with few labeled nodes. Higher (0.6-0.7) if very few labels."
+      },
+      {
+        "parameter": "Weight Decay (L2)",
+        "recommendedValue": "5e-4",
+        "rationale": "L2 regularization on weights. Critical for small labeled sets (prevents memorization). Tune in range [1e-5, 1e-3]."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Over-smoothing (deep models perform worse)",
+        "solution": "Limit depth to 2-3 layers. Add residual connections: H^(l+1) = H^(l) + GCN(H^(l)). Use jumping knowledge: concatenate representations from all layers. Try attention mechanisms (GAT) to reduce smoothing."
+      },
+      {
+        "problem": "Memory issues with large graphs",
+        "solution": "Use minibatch training with neighbor sampling (GraphSAGE). Cluster graphs into subgraphs (ClusterGCN). Use sampling: sample k neighbors per node instead of full neighborhood. PyTorch Geometric's NeighborLoader handles this."
+      },
+      {
+        "problem": "Overfitting with few labeled nodes",
+        "solution": "Increase dropout (0.5-0.7). Use weight decay (L2 reg). Early stopping on validation set. Data augmentation: DropEdge (randomly remove edges during training)."
+      },
+      {
+        "problem": "Slow preprocessing of A_hat",
+        "solution": "Precompute D̃^(-1/2) Ã D̃^(-1/2) once before training. For dynamic graphs: use approximate normalization or skip normalization (performance hit). For very large graphs: use sparse matrix operations (scipy.sparse or torch.sparse)."
+      }
+    ]
+  },
+  "comparisons": ["gat", "graphsage", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Semi-Supervised Classification with Graph Convolutional Networks",
+      "url": "https://arxiv.org/abs/1609.02907",
+      "description": "Original GCN paper (2016) by Kipf & Welling"
+    },
+    {
+      "type": "code",
+      "title": "PyTorch Geometric",
+      "url": "https://pytorch-geometric.readthedocs.io/",
+      "description": "Official library for GNNs in PyTorch with GCNConv implementation"
+    },
+    {
+      "type": "blog",
+      "title": "Graph Convolutional Networks Explained",
+      "url": "https://tkipf.github.io/graph-convolutional-networks/",
+      "description": "Blog post by original author with intuitive explanations"
+    },
+    {
+      "type": "tutorial",
+      "title": "Stanford CS224W",
+      "url": "http://web.stanford.edu/class/cs224w/",
+      "description": "Machine Learning with Graphs course covering GCNs and GNNs"
+    }
+  ],
+  "tags": ["gcn", "graph-neural-network", "spectral", "semi-supervised", "node-classification", "2016"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB (small graphs like Cora)",
+    "recommendedVRAM": "8 GB (large graphs with sampling)",
+    "trainingTime": {
+      "gpu": "< 1 minute for Cora, 10-30 min for Reddit (with sampling)"
+    },
+    "storageRequirements": "~1 MB (small model)"
+  }
+}

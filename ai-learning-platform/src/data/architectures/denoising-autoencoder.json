@@ -1,0 +1,265 @@
+{
+  "id": "denoising-autoencoder",
+  "name": "Denoising Autoencoder (DAE)",
+  "category": "autoencoder",
+  "subcategory": "Regularized Autoencoders",
+  "year": 2008,
+  "authors": ["Pascal Vincent", "Hugo Larochelle", "Yoshua Bengio"],
+  "paper": "Extracting and Composing Robust Features with Denoising Autoencoders",
+  "paperUrl": "https://www.cs.toronto.edu/~larocheh/publications/icml-2008-denoising-autoencoders.pdf",
+  "description": "Denoising Autoencoders learn robust representations by training the network to reconstruct clean data from corrupted inputs. The key idea: instead of input → encode → decode → input (vanilla AE), we do corrupted_input → encode → decode → original_clean_input. By learning to remove noise/corruption, the network is forced to capture the underlying data structure and essential features, ignoring spurious patterns. This acts as powerful regularization, preventing memorization and encouraging learning of meaningful features. DAEs can remove Gaussian noise, mask random pixels, add salt-and-pepper noise, or apply dropout. The learned representations are more robust and generalize better than vanilla autoencoders.",
+  "plainEnglish": "Imagine learning to read by practicing with smudged, partially erased text. You'd learn the essential letter shapes and word patterns, not just memorize specific pixels. That's Denoising Autoencoders! Training: (1) Take clean image, (2) Corrupt it (add noise, mask pixels, blur it), (3) Feed corrupted version to encoder, (4) Train decoder to output the original clean image. The network learns what's signal vs noise. For MNIST, mask 30% of pixels randomly—the network must infer missing parts from context, learning digit structure. Applications: obvious for actual denoising (clean up photos, remove scratches from old films), but also used for feature learning (better than vanilla AE) and semi-supervised learning. The corruption is training-time only—at test time, feed clean images to get features or denoise real noisy images.",
+  "keyInnovation": "Training with corruption acts as strong regularization and feature learning. Unlike vanilla AE which can memorize, DAE must generalize to denoise. The corruption process is stochastic—same image corrupted differently each epoch, providing data augmentation. DAEs learn manifold structure: they project corrupted points back to clean data manifold. This makes them robust to real-world corruption at test time. Historical impact: sparked interest in unsupervised pre-training (2008-2012), used to initialize deep networks before supervised learning. While less common now (replaced by batch norm, dropout, better initialization), denoising principle influenced modern models: BERT's masked language modeling is conceptually similar, diffusion models iteratively denoise, U-Net for medical imaging uses denoising ideas.",
+  "architecture": {
+    "inputShape": [784],
+    "outputShape": [784],
+    "layers": [
+      {
+        "type": "noise",
+        "name": "Corruption Layer",
+        "description": "Add noise or mask input (training only)",
+        "parameters": {
+          "noise_type": "gaussian",
+          "noise_level": 0.3
+        },
+        "parameterCount": 0
+      },
+      {
+        "type": "dense",
+        "name": "Encoder Layer 1",
+        "description": "First encoding layer",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 200960
+      },
+      {
+        "type": "dense",
+        "name": "Encoder Layer 2 (Bottleneck)",
+        "description": "Compressed latent representation",
+        "parameters": {
+          "units": 32,
+          "activation": "relu"
+        },
+        "parameterCount": 8224
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Layer 1",
+        "description": "First decoding layer",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 8448
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Layer 2",
+        "description": "Reconstruct clean output",
+        "parameters": {
+          "units": 784,
+          "activation": "sigmoid"
+        },
+        "parameterCount": 201488
+      }
+    ],
+    "depth": 4,
+    "parameters": 419120,
+    "flops": "~840K",
+    "memoryFootprint": "~1.7 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Corruption Process",
+        "latex": "\\tilde{\\mathbf{x}} \\sim q_{corrupt}(\\tilde{\\mathbf{x}} | \\mathbf{x})",
+        "explanation": "Stochastically corrupt clean input x to get noisy input x̃. Common corruptions: Gaussian noise x̃ = x + ε (ε ~ N(0,σ²)), Masking noise (set random pixels to 0), Salt-and-pepper (random black/white pixels), Dropout (zero random features).",
+        "variables": {
+          "x": "Clean input",
+          "x̃": "Corrupted input",
+          "q_corrupt": "Corruption distribution"
+        }
+      },
+      {
+        "name": "Encoding",
+        "latex": "\\mathbf{z} = f_{\\theta}(\\tilde{\\mathbf{x}}) = \\sigma(\\mathbf{W}_{enc} \\tilde{\\mathbf{x}} + \\mathbf{b}_{enc})",
+        "explanation": "Encoder processes corrupted input x̃ (not clean x!). Must learn features robust to corruption.",
+        "variables": {
+          "z": "Latent representation from corrupted input",
+          "x̃": "Corrupted input"
+        }
+      },
+      {
+        "name": "Decoding",
+        "latex": "\\hat{\\mathbf{x}} = g_{\\phi}(\\mathbf{z}) = \\sigma(\\mathbf{W}_{dec} \\mathbf{z} + \\mathbf{b}_{dec})",
+        "explanation": "Decoder reconstructs clean original x from latent z. Reconstruction target is original clean input, not corrupted version.",
+        "variables": {
+          "x̂": "Reconstructed output (should match clean x)"
+        }
+      },
+      {
+        "name": "Denoising Loss",
+        "latex": "\\mathcal{L} = \\mathbb{E}_{\\mathbf{x} \\sim p_{data}, \\tilde{\\mathbf{x}} \\sim q_{corrupt}}[||\\mathbf{x} - g_{\\phi}(f_{\\theta}(\\tilde{\\mathbf{x}}))||^2]",
+        "explanation": "THE KEY: Minimize distance between reconstruction x̂ and original clean x (not corrupted x̃). Expectation over both data distribution and corruption process. Forces network to learn denoising.",
+        "variables": {
+          "p_data": "True data distribution",
+          "q_corrupt": "Corruption distribution"
+        }
+      },
+      {
+        "name": "Score Matching Interpretation",
+        "latex": "\\nabla_{\\mathbf{x}} \\log p(\\mathbf{x}) \\approx \\frac{\\mathbf{x} - \\hat{\\mathbf{x}}}{\\sigma^2}",
+        "explanation": "DAE implicitly learns score function (gradient of log density). The denoising direction points toward high-density regions of data manifold. Connection to diffusion models and score-based generative models.",
+        "variables": {
+          "∇_x log p(x)": "Score function (gradient of log density)",
+          "σ²": "Noise variance"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Manifold Learning",
+        "statement": "DAE learns to project corrupted points back onto the data manifold by estimating the manifold tangent space.",
+        "significance": "Explains why DAE features are robust: they capture intrinsic data structure, not noise."
+      },
+      {
+        "name": "Connection to Score Matching",
+        "statement": "Training DAE with small Gaussian noise is equivalent to score matching—learning ∇ log p(x).",
+        "significance": "Theoretical foundation. Links DAE to probabilistic modeling and modern score-based generative models."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass DenoisingAutoencoder(nn.Module):\n    def __init__(self, input_dim=784, latent_dim=32):\n        super().__init__()\n        # Encoder\n        self.encoder = nn.Sequential(\n            nn.Linear(input_dim, 256),\n            nn.ReLU(),\n            nn.Linear(256, latent_dim),\n            nn.ReLU()\n        )\n        # Decoder\n        self.decoder = nn.Sequential(\n            nn.Linear(latent_dim, 256),\n            nn.ReLU(),\n            nn.Linear(256, input_dim),\n            nn.Sigmoid()\n        )\n    \n    def forward(self, x):\n        z = self.encoder(x)\n        x_recon = self.decoder(z)\n        return x_recon\n\ndef add_noise(x, noise_type='gaussian', noise_factor=0.3):\n    if noise_type == 'gaussian':\n        # Gaussian noise\n        noisy = x + noise_factor * torch.randn_like(x)\n        return torch.clamp(noisy, 0., 1.)\n    elif noise_type == 'masking':\n        # Masking noise (randomly zero out pixels)\n        mask = torch.bernoulli(torch.ones_like(x) * (1 - noise_factor))\n        return x * mask\n    elif noise_type == 'salt_pepper':\n        # Salt and pepper noise\n        noisy = x.clone()\n        salt = torch.rand_like(x) < noise_factor/2\n        pepper = torch.rand_like(x) < noise_factor/2\n        noisy[salt] = 1.0\n        noisy[pepper] = 0.0\n        return noisy\n\n# Training\nmodel = DenoisingAutoencoder()\ncriterion = nn.MSELoss()  # or nn.BCELoss()\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-3)\n\nfor epoch in range(100):\n    for data in dataloader:\n        x_clean = data[0].view(-1, 784)\n        \n        # Add corruption\n        x_noisy = add_noise(x_clean, 'gaussian', 0.3)\n        \n        # Forward: reconstruct clean from noisy\n        x_recon = model(x_noisy)\n        loss = criterion(x_recon, x_clean)  # Target is clean!\n        \n        # Backward\n        optimizer.zero_grad()\n        loss.backward()\n        optimizer.step()\n    \n    print(f'Epoch {epoch}, Loss: {loss.item():.4f}')\n\n# Denoising at test time\nwith torch.no_grad():\n    test_noisy = add_noise(test_clean, 'gaussian', 0.5)\n    denoised = model(test_noisy)\n    # denoised contains cleaned images"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Image Denoising",
+      "application": "Photo enhancement, old film restoration",
+      "description": "Remove noise from photos, scanned documents, medical images. Works for various noise types: Gaussian, salt-and-pepper, compression artifacts.",
+      "realWorldExample": "Adobe Photoshop's AI denoise uses DAE-like networks. Google Photos' enhance feature. Medical imaging: denoise MRI/CT scans while preserving diagnostic details."
+    },
+    {
+      "domain": "Feature Learning",
+      "application": "Unsupervised pre-training for vision",
+      "description": "Learn robust features from unlabeled images. Used features for downstream classification achieve better accuracy than raw pixels or vanilla AE.",
+      "realWorldExample": "Before ImageNet pre-training became standard (2012), DAEs were used to initialize CNNs (2008-2012). Still useful when labeled data is scarce."
+    },
+    {
+      "domain": "Semi-Supervised Learning",
+      "application": "Leverage unlabeled data with few labels",
+      "description": "Pre-train encoder with DAE on all data (labeled + unlabeled), then fine-tune on labeled subset for classification. Improves over supervised-only training.",
+      "realWorldExample": "Used in NLP before BERT. Ladder Networks (2015) combine DAE with supervised learning for semi-supervised classification, achieving SOTA on MNIST with just 100 labels."
+    },
+    {
+      "domain": "Inpainting",
+      "application": "Fill in missing image regions",
+      "description": "Train with masking noise (zero out image patches). At test, fill holes, remove objects, restore damaged photos.",
+      "realWorldExample": "Photo editing apps: remove photobombers, erase unwanted objects. Art restoration: fill damaged areas in paintings. Medical: reconstruct missing MRI slices."
+    },
+    {
+      "domain": "Anomaly Detection",
+      "application": "Detect outliers and defects",
+      "description": "Train on clean/normal data. At test, anomalies don't denoise well (high reconstruction error). More robust than vanilla AE.",
+      "realWorldExample": "Manufacturing: detect defects on assembly lines. Network security: identify unusual traffic patterns. Medical: detect tumors as anomalies."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MNIST (Denoising)",
+        "otherMetrics": {
+          "PSNR": "~28-32 dB (30% Gaussian noise)",
+          "note": "PSNR = Peak Signal-to-Noise Ratio, higher is better"
+        }
+      },
+      {
+        "name": "CIFAR-10 (Feature Learning)",
+        "accuracy": 82,
+        "otherMetrics": {
+          "note": "Classification accuracy using DAE features (2008). Now surpassed by end-to-end supervised CNNs."
+        }
+      },
+      {
+        "name": "BSD300 (Natural Image Denoising)",
+        "otherMetrics": {
+          "PSNR": "~30-35 dB",
+          "note": "Standard denoising benchmark. Modern models (DnCNN, N2N) achieve 35-40 dB."
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Noise Level",
+        "recommendedValue": "0.1-0.5 for Gaussian, 0.2-0.4 for masking",
+        "rationale": "Too low: network doesn't learn robustness. Too high: task becomes impossible. Start with 0.3 and adjust."
+      },
+      {
+        "parameter": "Noise Type",
+        "recommendedValue": "Match expected test corruption",
+        "rationale": "Gaussian for camera noise, masking for dropout/occlusions, salt-and-pepper for dead pixels. Can mix types."
+      },
+      {
+        "parameter": "Architecture Depth",
+        "recommendedValue": "Deeper than vanilla AE (4-8 layers)",
+        "rationale": "Denoising requires more capacity. Use skip connections (U-Net style) for better detail preservation."
+      },
+      {
+        "parameter": "Loss Function",
+        "recommendedValue": "MSE for natural images, BCE for binary, perceptual loss for quality",
+        "rationale": "MSE is simple and fast. Perceptual loss (compare features) gives sharper results but slower training."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Over-smoothing (losing fine details)",
+        "solution": "MSE loss causes blur. Solutions: (1) Add perceptual loss, (2) Use adversarial loss (add discriminator), (3) Reduce noise level, (4) Use skip connections (U-Net architecture)."
+      },
+      {
+        "problem": "Doesn't generalize to new noise types",
+        "solution": "Train with diverse noise types if test noise is unknown. Use data augmentation: vary noise levels and types during training."
+      },
+      {
+        "problem": "Slow training",
+        "solution": "Corruption adds overhead. Use GPU-accelerated noise addition. Pre-generate multiple corrupted versions if dataset fits in memory."
+      }
+    ]
+  },
+  "comparisons": ["autoencoder", "vae", "u-net", "gan"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Extracting and Composing Robust Features with Denoising Autoencoders",
+      "url": "https://www.cs.toronto.edu/~larocheh/publications/icml-2008-denoising-autoencoders.pdf",
+      "description": "Original 2008 DAE paper by Vincent et al."
+    },
+    {
+      "type": "paper",
+      "title": "Stacked Denoising Autoencoders",
+      "url": "http://www.jmlr.org/papers/volume11/vincent10a/vincent10a.pdf",
+      "description": "Deep DAE for unsupervised pre-training (2010)"
+    },
+    {
+      "type": "blog",
+      "title": "Image Denoising with Deep Learning",
+      "url": "https://paperswithcode.com/task/image-denoising",
+      "description": "Modern approaches to image denoising"
+    }
+  ],
+  "tags": ["denoising", "autoencoder", "unsupervised", "robust", "regularization", "2008"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "2 GB",
+    "recommendedVRAM": "4 GB",
+    "trainingTime": {
+      "gpu": "10-20 minutes on MNIST, 1-3 hours on CIFAR-10"
+    },
+    "storageRequirements": "~2-10 MB"
+  }
+}

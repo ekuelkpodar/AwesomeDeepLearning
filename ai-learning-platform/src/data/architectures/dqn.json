@@ -1,0 +1,322 @@
+{
+  "id": "dqn",
+  "name": "DQN (Deep Q-Network)",
+  "category": "reinforcement-learning",
+  "subcategory": "Value-Based",
+  "year": 2015,
+  "authors": ["Volodymyr Mnih", "Koray Kavukcuoglu", "David Silver", "Andrei A. Rusu", "Joel Veness", "Marc G. Bellemare", "Alex Graves", "Martin Riedmiller", "Andreas K. Fidjeland", "Georg Ostrovski", "Stig Petersen", "Charles Beattie", "Amir Sadik", "Ioannis Antonoglou", "Helen King", "Dharshan Kumaran", "Daan Wierstra", "Shane Legg", "Demis Hassabis"],
+  "paper": "Human-level control through deep reinforcement learning",
+  "paperUrl": "https://www.nature.com/articles/nature14236",
+  "description": "Deep Q-Network revolutionized reinforcement learning by combining Q-learning with deep neural networks. Before DQN, RL worked only on small state spaces (tabular Q-learning). DQN enabled RL on high-dimensional inputs: raw pixels from Atari games! Key innovations: (1) Experience replay—store transitions in memory, sample randomly to break correlations. (2) Target network—separate network for computing targets, updated slowly to stabilize training. (3) Clip rewards to [-1, 1]—prevents gradients from exploding. Result: superhuman performance on 29 Atari games (Breakout, Pong, Space Invaders). DQN is value-based RL: learns Q(s,a)—expected return from state s taking action a. No explicit policy—choose action with max Q-value. Foundation for AlphaGo, robotics, autonomous systems. Published in Nature 2015—landmark AI achievement.",
+  "plainEnglish": "Imagine teaching an AI to play Atari games from pixels (no game rules, just screen + score). Tabular Q-learning: impossible (too many pixel combinations). DQN solution: use neural network to approximate Q(s,a)—'how good is action a in state s?' Training: (1) Agent plays, stores experiences (state, action, reward, next_state) in replay memory (1M transitions). (2) Sample random minibatch (breaks temporal correlations—consecutive frames are similar). (3) Compute target: y = reward + γ × max Q(next_state, a'). Use separate target network (updated every 10k steps) to prevent moving target problem. (4) Train Q-network: minimize (Q(s,a) - y)². Repeat millions of steps. Agent learns: in Breakout, move paddle under ball (high Q). In Pong, anticipate ball trajectory. After 50M frames (~38 hours gameplay), DQN achieves human-level performance on most games, superhuman on some! No hand-crafted features—learns directly from pixels. DQN sparked deep RL revolution: AlphaGo (defeated world champion), robotics (grasping), autonomous driving.",
+  "keyInnovation": "Experience replay buffer: store (s, a, r, s') transitions, sample randomly for training. Breaks temporal correlations (consecutive states are similar, causes overfitting). Enables reuse of data (sample-efficient). Typical size: 1M transitions. Target network Q̂: separate network for computing TD targets. Updated every C steps (e.g., 10,000). Prevents instability from 'chasing a moving target.' Without it, Q-network diverges. Reward clipping: clip r to [-1, 1]. Makes algorithm robust across games with different reward scales (Pong: ±1, Breakout: +1 per brick). Frame stacking: stack 4 consecutive frames as input (captures motion/velocity). Huber loss: less sensitive to outliers than MSE. Double DQN: decouple action selection from evaluation—fixes overestimation bias. Dueling DQN: separate value V(s) and advantage A(s,a) streams. Rainbow DQN: combines 6 DQN extensions (Double, Dueling, Prioritized Replay, Multi-step, Distributional, Noisy Nets)—SOTA Atari.",
+  "architecture": {
+    "inputShape": [4, 84, 84],
+    "outputShape": [18],
+    "layers": [
+      {
+        "type": "conv2d",
+        "name": "Conv Layer 1",
+        "description": "Extract low-level features from stacked frames (edges, textures)",
+        "parameters": {
+          "in_channels": 4,
+          "out_channels": 32,
+          "kernel_size": 8,
+          "stride": 4,
+          "activation": "relu"
+        },
+        "parameterCount": 8224
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv Layer 2",
+        "description": "Extract mid-level features (objects, ball, paddle)",
+        "parameters": {
+          "in_channels": 32,
+          "out_channels": 64,
+          "kernel_size": 4,
+          "stride": 2,
+          "activation": "relu"
+        },
+        "parameterCount": 32832
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv Layer 3",
+        "description": "Extract high-level features (game state, positions)",
+        "parameters": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "kernel_size": 3,
+          "stride": 1,
+          "activation": "relu"
+        },
+        "parameterCount": 36928
+      },
+      {
+        "type": "flatten",
+        "name": "Flatten",
+        "description": "Flatten spatial features to vector (7×7×64 = 3136)",
+        "parameters": {},
+        "parameterCount": 0
+      },
+      {
+        "type": "linear",
+        "name": "Fully Connected 1",
+        "description": "Combine features for Q-value estimation",
+        "parameters": {
+          "in_features": 3136,
+          "out_features": 512,
+          "activation": "relu"
+        },
+        "parameterCount": 1606144
+      },
+      {
+        "type": "linear",
+        "name": "Q-value Output",
+        "description": "Output Q(s,a) for each action (18 actions for Atari)",
+        "parameters": {
+          "in_features": 512,
+          "out_features": 18
+        },
+        "parameterCount": 9234
+      }
+    ],
+    "depth": 6,
+    "parameters": 1693362,
+    "flops": "~280M per forward pass",
+    "memoryFootprint": "~6.5 MB (fp32 model) + 4 GB (replay buffer)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Q-Learning Update (Bellman Equation)",
+        "latex": "Q(s_t, a_t) \\leftarrow Q(s_t, a_t) + \\alpha \\left[r_t + \\gamma \\max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t)\\right]",
+        "explanation": "THE CORE of value-based RL. Q(s,a) = expected cumulative reward from state s, action a. TD error: δ = r + γ max Q(s', a') - Q(s, a). Update Q toward TD target. α is learning rate. γ is discount factor (0.99 typical—values future rewards). Tabular Q-learning: update Q-table entry. DQN: use neural network Q_θ(s,a), backprop δ through network.",
+        "variables": {
+          "Q(s,a)": "Q-value (expected return)",
+          "r_t": "Immediate reward",
+          "γ": "Discount factor (0.99)",
+          "α": "Learning rate",
+          "max_a' Q(s',a')": "Best Q-value in next state"
+        }
+      },
+      {
+        "name": "DQN Loss Function",
+        "latex": "\\mathcal{L}(\\theta) = \\mathbb{E}_{(s,a,r,s') \\sim \\mathcal{D}} \\left[\\left(r + \\gamma \\max_{a'} Q_{\\hat{\\theta}}(s', a') - Q_\\theta(s, a)\\right)^2\\right]",
+        "explanation": "THE DQN OBJECTIVE. Sample minibatch from replay buffer D. Compute TD target: y = r + γ max Q̂(s', a') using target network θ̂. Compute Q(s,a) using online network θ. Minimize squared TD error. Key: target network θ̂ is frozen (updated every C steps)—prevents moving target instability. Expectation over replay buffer breaks correlations.",
+        "variables": {
+          "θ": "Online Q-network parameters",
+          "θ̂": "Target Q-network parameters (frozen)",
+          "D": "Replay buffer (1M transitions)",
+          "y": "TD target (computed with θ̂)"
+        }
+      },
+      {
+        "name": "ε-Greedy Exploration",
+        "latex": "a_t = \\begin{cases} \\arg\\max_a Q_\\theta(s_t, a) & \\text{with probability } 1-\\varepsilon \\\\ \\text{random action} & \\text{with probability } \\varepsilon \\end{cases}",
+        "explanation": "Exploration-exploitation trade-off. ε-greedy: choose best action (exploit) with prob 1-ε, random action (explore) with prob ε. Typical schedule: ε = 1.0 (pure exploration) → 0.1 (mostly exploitation) over 1M steps. Balances learning (try new actions) vs. performance (use learned policy). Without exploration, agent gets stuck in local optimum.",
+        "variables": {
+          "ε": "Exploration rate (1.0 → 0.1)",
+          "a_t": "Action at time t",
+          "arg max": "Action with highest Q-value"
+        }
+      },
+      {
+        "name": "Target Network Update",
+        "latex": "\\hat{\\theta} \\leftarrow \\theta \\quad \\text{every } C \\text{ steps}",
+        "explanation": "Periodically copy online network θ to target network θ̂. Typical C = 10,000 steps. Prevents instability: without target network, Q-values chase themselves (bootstrap problem). Soft update alternative (Polyak averaging): θ̂ ← τθ + (1-τ)θ̂ with τ=0.001 (gradual update).",
+        "variables": {
+          "C": "Update frequency (10,000 steps)",
+          "θ → θ̂": "Hard update (copy weights)"
+        }
+      },
+      {
+        "name": "Double DQN (Fixes Overestimation)",
+        "latex": "y = r + \\gamma Q_{\\hat{\\theta}}\\left(s', \\arg\\max_{a'} Q_\\theta(s', a')\\right)",
+        "explanation": "Vanilla DQN overestimates Q-values (max operator is biased). Double DQN decouples action selection (using online θ) from evaluation (using target θ̂). Select action: a* = arg max Q_θ(s', a'). Evaluate: Q̂(s', a*). Reduces overestimation, improves performance. Simple change, significant impact.",
+        "variables": {
+          "arg max Q_θ": "Action selection (online)",
+          "Q̂": "Action evaluation (target)"
+        }
+      },
+      {
+        "name": "Huber Loss (Robust to Outliers)",
+        "latex": "L_\\delta(\\delta) = \\begin{cases} \\frac{1}{2}\\delta^2 & \\text{if } |\\delta| \\leq 1 \\\\ |\\delta| - \\frac{1}{2} & \\text{otherwise} \\end{cases}",
+        "explanation": "DQN uses Huber loss instead of MSE. δ is TD error. For small errors (|δ| ≤ 1): quadratic (MSE). For large errors: linear (MAE). Less sensitive to outliers (large TD errors). Improves stability. Gradient clipping alternative: clip ∇θ to [-1, 1].",
+        "variables": {
+          "δ": "TD error (r + γ max Q̂ - Q)",
+          "Huber": "Smooth L1 loss"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Q-Learning Convergence",
+        "statement": "Under tabular representation and standard assumptions (all state-action pairs visited infinitely, learning rate decay), Q-learning converges to optimal Q* with probability 1.",
+        "significance": "Theoretical foundation. DQN extends to function approximation (neural networks)—no convergence guarantee but works empirically with experience replay + target network."
+      },
+      {
+        "name": "Deadly Triad Problem",
+        "statement": "Combining function approximation + bootstrapping (TD learning) + off-policy learning can cause instability/divergence. DQN mitigates via replay buffer and target network.",
+        "significance": "Explains why naive deep Q-learning fails. DQN's innovations (replay, target net) are essential, not optional."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.optim as optim\nimport numpy as np\nfrom collections import deque\nimport random\n\nclass DQN(nn.Module):\n    def __init__(self, input_shape=(4, 84, 84), num_actions=18):\n        super().__init__()\n        self.conv = nn.Sequential(\n            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),\n            nn.ReLU(),\n            nn.Conv2d(32, 64, kernel_size=4, stride=2),\n            nn.ReLU(),\n            nn.Conv2d(64, 64, kernel_size=3, stride=1),\n            nn.ReLU()\n        )\n        \n        # Calculate conv output size\n        conv_out_size = self._get_conv_out(input_shape)\n        \n        self.fc = nn.Sequential(\n            nn.Linear(conv_out_size, 512),\n            nn.ReLU(),\n            nn.Linear(512, num_actions)\n        )\n    \n    def _get_conv_out(self, shape):\n        o = self.conv(torch.zeros(1, *shape))\n        return int(np.prod(o.size()))\n    \n    def forward(self, x):\n        # x: (batch, 4, 84, 84)\n        conv_out = self.conv(x)\n        conv_out = conv_out.view(conv_out.size(0), -1)\n        return self.fc(conv_out)\n\nclass ReplayBuffer:\n    def __init__(self, capacity=1000000):\n        self.buffer = deque(maxlen=capacity)\n    \n    def push(self, state, action, reward, next_state, done):\n        self.buffer.append((state, action, reward, next_state, done))\n    \n    def sample(self, batch_size):\n        batch = random.sample(self.buffer, batch_size)\n        states, actions, rewards, next_states, dones = zip(*batch)\n        return (\n            torch.FloatTensor(np.array(states)),\n            torch.LongTensor(actions),\n            torch.FloatTensor(rewards),\n            torch.FloatTensor(np.array(next_states)),\n            torch.FloatTensor(dones)\n        )\n    \n    def __len__(self):\n        return len(self.buffer)\n\nclass DQNAgent:\n    def __init__(self, num_actions=18, gamma=0.99, lr=0.00025, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=1000000):\n        self.num_actions = num_actions\n        self.gamma = gamma\n        self.epsilon = epsilon_start\n        self.epsilon_end = epsilon_end\n        self.epsilon_decay = epsilon_decay\n        self.steps = 0\n        \n        # Online and target networks\n        self.online_net = DQN(num_actions=num_actions)\n        self.target_net = DQN(num_actions=num_actions)\n        self.target_net.load_state_dict(self.online_net.state_dict())\n        self.target_net.eval()\n        \n        self.optimizer = optim.Adam(self.online_net.parameters(), lr=lr)\n        self.replay_buffer = ReplayBuffer()\n    \n    def select_action(self, state):\n        # ε-greedy\n        self.epsilon = self.epsilon_end + (self.epsilon - self.epsilon_end) * \\\n                       np.exp(-self.steps / self.epsilon_decay)\n        self.steps += 1\n        \n        if random.random() < self.epsilon:\n            return random.randrange(self.num_actions)\n        else:\n            with torch.no_grad():\n                state_tensor = torch.FloatTensor(state).unsqueeze(0)\n                q_values = self.online_net(state_tensor)\n                return q_values.argmax(1).item()\n    \n    def train(self, batch_size=32):\n        if len(self.replay_buffer) < batch_size:\n            return\n        \n        states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)\n        \n        # Compute Q(s, a)\n        q_values = self.online_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)\n        \n        # Compute target: y = r + γ max Q̂(s', a')\n        with torch.no_grad():\n            next_q_values = self.target_net(next_states).max(1)[0]\n            targets = rewards + self.gamma * next_q_values * (1 - dones)\n        \n        # Huber loss\n        loss = nn.functional.smooth_l1_loss(q_values, targets)\n        \n        # Optimize\n        self.optimizer.zero_grad()\n        loss.backward()\n        # Gradient clipping\n        torch.nn.utils.clip_grad_norm_(self.online_net.parameters(), 10)\n        self.optimizer.step()\n        \n        return loss.item()\n    \n    def update_target_network(self):\n        self.target_net.load_state_dict(self.online_net.state_dict())\n\n# Training loop\nagent = DQNAgent()\ntarget_update_freq = 10000\n\nfor episode in range(10000):\n    state = env.reset()\n    episode_reward = 0\n    \n    while True:\n        # Select action\n        action = agent.select_action(state)\n        \n        # Take action in environment\n        next_state, reward, done, _ = env.step(action)\n        \n        # Clip reward to [-1, 1]\n        clipped_reward = np.clip(reward, -1, 1)\n        \n        # Store transition\n        agent.replay_buffer.push(state, action, clipped_reward, next_state, float(done))\n        \n        # Train\n        loss = agent.train(batch_size=32)\n        \n        # Update target network\n        if agent.steps % target_update_freq == 0:\n            agent.update_target_network()\n        \n        episode_reward += reward\n        state = next_state\n        \n        if done:\n            break\n    \n    print(f'Episode {episode}, Reward: {episode_reward}, ε: {agent.epsilon:.3f}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Game Playing (Atari)",
+      "application": "Learn to play video games from pixels",
+      "description": "DQN's breakthrough: human-level performance on 29 Atari games. Learns control policies from raw pixels (84×84 grayscale, 4 frames stacked). No game-specific features—same algorithm for Breakout, Pong, Space Invaders. Superhuman on Breakout, Video Pinball, Boxing.",
+      "realWorldExample": "DeepMind's Nature 2015 paper. Trained on 50M frames (~38 hours gameplay). Achieved 75% of human performance on average across 57 games. Some games: 10× human score (Breakout). Sparked deep RL revolution, led to AlphaGo."
+    },
+    {
+      "domain": "Robotics (Grasping, Navigation)",
+      "application": "Robot manipulation and control from vision",
+      "description": "DQN for robot grasping: learn to pick objects from camera images. Discrete actions (move left/right/forward, open/close gripper). Sim-to-real transfer: train in simulation, deploy on real robot. Applications: warehouse automation, surgical robots.",
+      "realWorldExample": "Google Brain's robotic grasping: DQN + QT-Opt on bin picking. 96% success rate on novel objects. Amazon Robotics Challenge: DQN for item picking. Fetch Robotics uses DQN for warehouse navigation."
+    },
+    {
+      "domain": "Autonomous Systems (Traffic, Energy)",
+      "application": "Traffic signal control, HVAC optimization, resource allocation",
+      "description": "DQN for adaptive traffic lights: reduce congestion by learning optimal signal timing. State: traffic density (camera/sensors). Actions: change signal. Reward: minimize waiting time. Energy: DQN controls HVAC systems in datacenters (30% energy savings).",
+      "realWorldExample": "Google DeepMind: DQN reduced datacenter cooling costs by 40% (2016). Traffic control in China (Alibaba City Brain): DQN for 128 intersections. Microsoft: DQN for cloud resource allocation."
+    },
+    {
+      "domain": "Finance (Trading, Portfolio Optimization)",
+      "application": "Algorithmic trading, dynamic hedging, portfolio management",
+      "description": "DQN for stock trading: state = market features (price, volume, indicators). Actions = buy/sell/hold. Reward = profit. Learns non-linear trading strategies. Risk: overfitting (train on historical, test on future). Use with caution.",
+      "realWorldExample": "JPMorgan, Goldman Sachs research DQN for trading execution (minimize market impact). Academic: DQN on cryptocurrency markets. Portfolio optimization: DQN for dynamic asset allocation (rebalancing)."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Atari 2600 (57 games)",
+        "otherMetrics": {
+          "Human Normalized Score": "~121% (DQN), ~350% (Rainbow)",
+          "Games Superhuman": "29/57 (DQN), 42/57 (Rainbow)",
+          "Training": "50M frames per game (~38 hours)",
+          "note": "Standard RL benchmark, ALE environment"
+        }
+      },
+      {
+        "name": "Breakout",
+        "otherMetrics": {
+          "DQN Score": "~400 (human: 30)",
+          "note": "DQN's best game—learns tunnel strategy"
+        }
+      },
+      {
+        "name": "Pong",
+        "otherMetrics": {
+          "DQN Score": "~20 (beats built-in AI)",
+          "Training": "~1M frames to converge",
+          "note": "Easiest Atari game for DQN"
+        }
+      },
+      {
+        "name": "CartPole-v1 (OpenAI Gym)",
+        "otherMetrics": {
+          "Solved Score": "475+ (out of 500)",
+          "Training": "~100 episodes",
+          "note": "Simple benchmark for testing RL algorithms"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Replay Buffer Size",
+        "recommendedValue": "1,000,000 transitions",
+        "rationale": "Larger = more diverse experiences, better decorrelation. But: higher memory (4 GB for Atari). Smaller for simple tasks (CartPole: 10k). Must be > batch_size × 100."
+      },
+      {
+        "parameter": "Target Network Update Frequency",
+        "recommendedValue": "10,000 steps (hard update) or τ=0.001 (soft update)",
+        "rationale": "Hard update: copy θ → θ̂ every C steps. Too frequent: unstable (moving target). Too rare: slow learning. Soft update (Polyak): θ̂ ← τθ + (1-τ)θ̂ every step, smoother."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.00025 (RMSprop) or 0.0001 (Adam)",
+        "rationale": "Lower than supervised learning (RL is non-stationary). DQN original: RMSprop 0.00025. Modern: Adam 0.0001. Too high: divergence. Too low: slow."
+      },
+      {
+        "parameter": "Discount Factor γ",
+        "recommendedValue": "0.99 (long-term) or 0.95 (short-term)",
+        "rationale": "γ=0.99: values far future (Atari). γ=0.95: short episodes (CartPole). γ→1: agent is far-sighted. γ→0: myopic (immediate rewards only)."
+      },
+      {
+        "parameter": "Exploration (ε schedule)",
+        "recommendedValue": "1.0 → 0.1 over 1M steps",
+        "rationale": "Start with pure exploration (ε=1), anneal to mostly exploitation (ε=0.1). Final ε=0.1 (not 0) maintains some exploration. Faster annealing for simple tasks."
+      },
+      {
+        "parameter": "Batch Size",
+        "recommendedValue": "32",
+        "rationale": "DQN original: 32. Larger (64-128): more stable but slower. Smaller (16): faster but noisier. Balance: sample efficiency vs. compute."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Q-values diverge or explode",
+        "solution": "Check target network update (should be every 10k steps). Use Huber loss instead of MSE. Clip gradients (max_norm=10). Reduce learning rate (0.00025 → 0.0001). Ensure replay buffer is filled before training."
+      },
+      {
+        "problem": "Agent doesn't learn (flat reward)",
+        "solution": "Check reward clipping (should be [-1, 1] for Atari). Verify ε-greedy (should start at 1.0, decay slowly). Increase replay buffer diversity (train after more exploration). Check environment wrapper (frame stacking, scaling)."
+      },
+      {
+        "problem": "Slow convergence or sample inefficiency",
+        "solution": "Use Double DQN (reduces overestimation). Try Dueling DQN (better value estimation). Prioritized Experience Replay (focus on important transitions). Multi-step returns (n-step DQN). Rainbow combines all improvements."
+      },
+      {
+        "problem": "High memory usage (replay buffer)",
+        "solution": "Reduce buffer size (1M → 100k for simple tasks). Use frame compression (store as uint8, not float32). Lazy frame stacking (store single frames, stack on sampling). Prioritized replay (smaller buffer, better samples)."
+      }
+    ]
+  },
+  "comparisons": ["ppo", "a3c", "sac"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Human-level control through deep reinforcement learning",
+      "url": "https://www.nature.com/articles/nature14236",
+      "description": "Original DQN paper (Nature 2015) by Mnih et al."
+    },
+    {
+      "type": "paper",
+      "title": "Deep Reinforcement Learning with Double Q-learning",
+      "url": "https://arxiv.org/abs/1509.06461",
+      "description": "Double DQN fixes overestimation bias"
+    },
+    {
+      "type": "paper",
+      "title": "Rainbow: Combining Improvements in Deep Reinforcement Learning",
+      "url": "https://arxiv.org/abs/1710.02298",
+      "description": "Combines 6 DQN extensions for SOTA Atari"
+    },
+    {
+      "type": "code",
+      "title": "OpenAI Baselines DQN",
+      "url": "https://github.com/openai/baselines",
+      "description": "Reference implementation"
+    }
+  ],
+  "tags": ["dqn", "reinforcement-learning", "value-based", "atari", "q-learning", "2015"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "6 GB (includes replay buffer)",
+    "recommendedVRAM": "8 GB (comfortable for Atari)",
+    "trainingTime": {
+      "gpu": "8-12 hours for Atari game (50M frames on GPU)"
+    },
+    "storageRequirements": "~6.5 MB (model) + 4 GB (replay buffer)"
+  }
+}

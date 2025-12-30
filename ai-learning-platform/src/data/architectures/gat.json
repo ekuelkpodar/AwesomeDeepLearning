@@ -1,0 +1,277 @@
+{
+  "id": "gat",
+  "name": "GAT (Graph Attention Network)",
+  "category": "graph",
+  "subcategory": "Attention-Based",
+  "year": 2017,
+  "authors": ["Petar Veličković", "Guillem Cucurull", "Arantxa Casanova", "Adriana Romero", "Pietro Liò", "Yoshua Bengio"],
+  "paper": "Graph Attention Networks",
+  "paperUrl": "https://arxiv.org/abs/1710.10903",
+  "description": "Graph Attention Networks bring the power of attention mechanisms to graph learning. While GCN treats all neighbors equally (weighted only by degree), GAT learns which neighbors are important via attention. Each node computes attention coefficients for its neighbors—focusing on relevant connections, ignoring noise. The attention mechanism is similar to Transformers but adapted for graphs: no positional encoding needed (graph structure provides position). Multi-head attention enables learning diverse neighborhood patterns. GAT solves GCN's limitations: (1) No need for Laplacian eigendecomposition. (2) Works on inductive learning (generalizes to unseen nodes/graphs). (3) Attention weights interpretable. (4) Mitigates over-smoothing via learned aggregation. Result: state-of-the-art on node classification, competitive with GCN but more flexible and interpretable.",
+  "plainEnglish": "Imagine you're on Twitter deciding whose tweets to read. Do you read all followers equally? No—you pay more attention to experts, friends, influencers. GAT does this for graph learning! Each node computes attention scores for neighbors: α_ij = how much node i attends to node j. High α → important neighbor (similar features, strong connection). Low α → ignore. How? (1) Concatenate node features: [h_i || h_j]. (2) Pass through learned attention function 'a' (single-layer network). (3) Softmax to normalize. (4) Weighted sum: h_i' = Σ_j α_ij W h_j. Multi-head attention: repeat K times with different weights, concatenate results. Like Transformers but for graphs! Example: Citation network—papers attend to relevant citations (same topic), ignore off-topic ones. Social network—users attend to influential friends. Molecule—atoms attend to chemically bonded neighbors. Attention weights are interpretable: visualize which neighbors matter most!",
+  "keyInnovation": "Self-attention mechanism for graphs. Attention coefficients: e_ij = LeakyReLU(a^T [W h_i || W h_j]), where || is concatenation. 'a' is learned attention vector. Normalized via softmax: α_ij = exp(e_ij) / Σ_k exp(e_ik). Multi-head attention (K heads): concatenate K independent attention outputs. Stabilizes learning, captures diverse patterns. Masked attention: compute e_ij only for neighbors (j ∈ N_i)—respects graph structure. Inductive learning: GAT generalizes to unseen nodes/graphs (GCN requires full graph for normalization). Computational: O(|E| × d²) like GCN, but more expressive. Interpretability: attention weights α_ij show which edges matter—useful for explainability. Limitation: sensitive to hyperparameters (num heads, hidden dim). Extensions: GATv2 (improved attention), SuperGAT (explicit edge attention), Heterogeneous GAT (different node/edge types).",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "graph_attention",
+        "name": "Multi-Head GAT Layer",
+        "description": "K attention heads aggregate neighbors with learned attention weights. Outputs concatenated.",
+        "parameters": {
+          "in_features": 128,
+          "out_features": 8,
+          "num_heads": 8,
+          "concat": true,
+          "dropout": 0.6,
+          "negative_slope": 0.2
+        },
+        "parameterCount": 8320
+      },
+      {
+        "type": "graph_attention",
+        "name": "Second GAT Layer",
+        "description": "Single-head attention for output. Uses averaging instead of concatenation.",
+        "parameters": {
+          "in_features": 64,
+          "out_features": 7,
+          "num_heads": 1,
+          "concat": false,
+          "dropout": 0.6,
+          "negative_slope": 0.2
+        },
+        "parameterCount": 455
+      }
+    ],
+    "depth": 2,
+    "parameters": 8775,
+    "flops": "~|E| × K × d² per layer (K = num heads)",
+    "memoryFootprint": "~35 KB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Attention Coefficients (Unnormalized)",
+        "latex": "e_{ij} = \\text{LeakyReLU}\\left(\\mathbf{a}^T [\\mathbf{W}\\mathbf{h}_i \\, || \\, \\mathbf{W}\\mathbf{h}_j]\\right)",
+        "explanation": "THE CORE. Compute how much node i should attend to neighbor j. W transforms node features h_i, h_j (d → d'). Concatenate [W h_i || W h_j] (2d' vector). Pass through learned attention vector 'a' (2d' → 1). LeakyReLU activation (slope 0.2). High e_ij → j is important to i. Only compute for neighbors j ∈ N_i (masked attention).",
+        "variables": {
+          "h_i": "Features of node i (d-dim)",
+          "h_j": "Features of neighbor j (d-dim)",
+          "W": "Shared weight matrix (d × d')",
+          "a": "Attention vector (2d' × 1)",
+          "||": "Concatenation operator"
+        }
+      },
+      {
+        "name": "Normalized Attention (Softmax)",
+        "latex": "\\alpha_{ij} = \\frac{\\exp(e_{ij})}{\\sum_{k \\in \\mathcal{N}_i} \\exp(e_{ik})}",
+        "explanation": "Normalize attention scores across neighbors. α_ij ∈ [0,1], Σ_k α_ik = 1. Softmax ensures valid probability distribution. High e_ij → high α_ij → neighbor j is important. Low e_ij → low α_ij → ignore neighbor j. Self-loop: node i attends to itself (i ∈ N_i).",
+        "variables": {
+          "α_ij": "Normalized attention weight (0 to 1)",
+          "N_i": "Neighborhood of node i (including self)"
+        }
+      },
+      {
+        "name": "Aggregation (Single-Head)",
+        "latex": "\\mathbf{h}_i' = \\sigma\\left(\\sum_{j \\in \\mathcal{N}_i} \\alpha_{ij} \\mathbf{W} \\mathbf{h}_j\\right)",
+        "explanation": "Weighted sum of neighbor features. Each neighbor j contributes W h_j weighted by attention α_ij. Important neighbors (high α) contribute more. σ is activation (ELU). Result: new node features h_i' that emphasize relevant neighbors.",
+        "variables": {
+          "h_i'": "Updated features for node i",
+          "σ": "Activation function (ELU or ReLU)"
+        }
+      },
+      {
+        "name": "Multi-Head Attention (Concatenation)",
+        "latex": "\\mathbf{h}_i' = \\mathop{\\Vert}_{k=1}^{K} \\sigma\\left(\\sum_{j \\in \\mathcal{N}_i} \\alpha_{ij}^k \\mathbf{W}^k \\mathbf{h}_j\\right)",
+        "explanation": "K independent attention heads with different weights W^k, a^k. Each head learns different patterns. Concatenate outputs (||). If K=8 heads, d'=8 per head → output is 64-dim. Stabilizes training, improves performance. Final layer: average instead of concatenate.",
+        "variables": {
+          "K": "Number of attention heads",
+          "||": "Concatenation across heads",
+          "α_ij^k": "Attention from head k",
+          "W^k": "Weight matrix for head k"
+        }
+      },
+      {
+        "name": "Multi-Head Attention (Averaging, Final Layer)",
+        "latex": "\\mathbf{h}_i' = \\sigma\\left(\\frac{1}{K} \\sum_{k=1}^{K} \\sum_{j \\in \\mathcal{N}_i} \\alpha_{ij}^k \\mathbf{W}^k \\mathbf{h}_j\\right)",
+        "explanation": "For output layer: average instead of concatenate. Ensures output dimension matches number of classes. Each head votes, we average their predictions. Often used with softmax for classification.",
+        "variables": {
+          "1/K": "Average across K heads"
+        }
+      },
+      {
+        "name": "Computational Complexity",
+        "latex": "\\mathcal{O}(|V| \\cdot K \\cdot d'^2 + |E| \\cdot K \\cdot d')",
+        "explanation": "Two parts: (1) Feature transformation W h_i for all nodes: O(|V| × K × d × d'). (2) Attention computation for all edges: O(|E| × K × d'). For sparse graphs (|E| ~ |V|), total is O(|V| × K × d²). K attention heads increase cost by factor K vs GCN.",
+        "variables": {
+          "|V|": "Number of nodes",
+          "|E|": "Number of edges",
+          "K": "Number of attention heads",
+          "d, d'": "Input and output feature dims"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Inductive Learning Capability",
+        "statement": "GAT can generalize to unseen nodes and graphs during inference without retraining, unlike GCN which requires knowing the full graph structure for normalization.",
+        "significance": "Enables transfer learning and dynamic graphs. GAT computes attention on-the-fly based on node features, not graph structure. Critical for real-world applications with evolving graphs."
+      },
+      {
+        "name": "Attention Interpretability",
+        "statement": "Attention weights α_ij can be visualized to understand which neighbors influence each node's prediction, providing model explainability.",
+        "significance": "Useful for debugging, building trust, and discovering patterns. Example: in molecule graphs, see which atoms/bonds are critical for toxicity prediction."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass GATLayer(nn.Module):\n    def __init__(self, in_features, out_features, num_heads=1, concat=True, dropout=0.6, alpha=0.2):\n        super().__init__()\n        self.in_features = in_features\n        self.out_features = out_features\n        self.num_heads = num_heads\n        self.concat = concat\n        self.dropout = dropout\n        self.alpha = alpha  # LeakyReLU negative slope\n        \n        # Weight matrix W (shared across heads)\n        self.W = nn.Parameter(torch.empty(size=(num_heads, in_features, out_features)))\n        \n        # Attention vector a (2*out_features → 1, per head)\n        self.a = nn.Parameter(torch.empty(size=(num_heads, 2 * out_features, 1)))\n        \n        self.leakyrelu = nn.LeakyReLU(self.alpha)\n        self.reset_parameters()\n    \n    def reset_parameters(self):\n        nn.init.xavier_uniform_(self.W)\n        nn.init.xavier_uniform_(self.a)\n    \n    def forward(self, X, adj):\n        # X: node features (n × in_features)\n        # adj: adjacency matrix (n × n), 1 if connected, 0 otherwise\n        n = X.size(0)\n        \n        # Transform features for all heads: (n × in_features) @ (num_heads × in_features × out_features)\n        # Result: (num_heads × n × out_features)\n        h = torch.stack([torch.mm(X, self.W[i]) for i in range(self.num_heads)])\n        \n        # Compute attention coefficients\n        # For each head k: e_ij = a^T [W h_i || W h_j]\n        e = torch.zeros(self.num_heads, n, n, device=X.device)\n        \n        for k in range(self.num_heads):\n            # Broadcast h[k] to compute all pairs\n            h_i = h[k].unsqueeze(1).repeat(1, n, 1)  # (n × n × out_features)\n            h_j = h[k].unsqueeze(0).repeat(n, 1, 1)  # (n × n × out_features)\n            \n            # Concatenate [h_i || h_j]\n            concat_h = torch.cat([h_i, h_j], dim=-1)  # (n × n × 2*out_features)\n            \n            # Compute attention: a^T [h_i || h_j]\n            e[k] = self.leakyrelu(torch.matmul(concat_h, self.a[k]).squeeze(-1))  # (n × n)\n        \n        # Mask attention to neighbors only (zero out non-neighbors)\n        e = e.masked_fill(adj.unsqueeze(0) == 0, float('-inf'))\n        \n        # Softmax normalization\n        alpha = F.softmax(e, dim=-1)  # (num_heads × n × n)\n        alpha = F.dropout(alpha, p=self.dropout, training=self.training)\n        \n        # Aggregate: h'_i = Σ_j α_ij W h_j\n        h_prime = torch.stack([torch.mm(alpha[k], h[k]) for k in range(self.num_heads)])\n        \n        if self.concat:\n            # Concatenate heads: (num_heads × n × out_features) → (n × num_heads*out_features)\n            return F.elu(h_prime.transpose(0, 1).reshape(n, -1))\n        else:\n            # Average heads: (num_heads × n × out_features) → (n × out_features)\n            return F.elu(h_prime.mean(dim=0))\n\nclass GAT(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim, num_heads=8, dropout=0.6):\n        super().__init__()\n        self.dropout = dropout\n        \n        # First layer: K heads, concatenate\n        self.gat1 = GATLayer(input_dim, hidden_dim, num_heads=num_heads, concat=True, dropout=dropout)\n        \n        # Second layer: 1 head, average\n        self.gat2 = GATLayer(hidden_dim * num_heads, output_dim, num_heads=1, concat=False, dropout=dropout)\n    \n    def forward(self, X, adj):\n        X = F.dropout(X, p=self.dropout, training=self.training)\n        X = self.gat1(X, adj)\n        X = F.dropout(X, p=self.dropout, training=self.training)\n        X = self.gat2(X, adj)\n        return F.log_softmax(X, dim=1)\n\n# Training\nmodel = GAT(input_dim=1433, hidden_dim=8, output_dim=7, num_heads=8)  # Cora dataset\noptimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)\n\nfor epoch in range(300):\n    model.train()\n    optimizer.zero_grad()\n    \n    output = model(X, adj)\n    loss = F.nll_loss(output[idx_train], labels[idx_train])\n    \n    loss.backward()\n    optimizer.step()\n\n# Using PyTorch Geometric (recommended)\nimport torch_geometric.nn as geom_nn\n\nclass GAT_PyG(nn.Module):\n    def __init__(self, input_dim, hidden_dim, output_dim, num_heads=8, dropout=0.6):\n        super().__init__()\n        self.dropout = dropout\n        \n        self.conv1 = geom_nn.GATConv(input_dim, hidden_dim, heads=num_heads, dropout=dropout)\n        self.conv2 = geom_nn.GATConv(hidden_dim * num_heads, output_dim, heads=1, concat=False, dropout=dropout)\n    \n    def forward(self, data):\n        x, edge_index = data.x, data.edge_index\n        \n        x = F.dropout(x, p=self.dropout, training=self.training)\n        x = self.conv1(x, edge_index)\n        x = F.elu(x)\n        \n        x = F.dropout(x, p=self.dropout, training=self.training)\n        x = self.conv2(x, edge_index)\n        \n        return F.log_softmax(x, dim=1)\n\nmodel_pyg = GAT_PyG(1433, 8, 7, num_heads=8)\noptimizer = torch.optim.Adam(model_pyg.parameters(), lr=0.005, weight_decay=5e-4)"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Node Classification with Noisy Graphs",
+      "application": "Classification when graph has irrelevant edges",
+      "description": "Social networks often have noisy connections (bots, spam, accidental follows). Citation networks have off-topic citations. GAT learns to ignore irrelevant edges via low attention weights. Outperforms GCN when graph structure is noisy or uncertain.",
+      "realWorldExample": "Twitter bot detection: GAT ignores spam followers, focuses on genuine connections. Achieves 2-3% higher accuracy than GCN. Reddit community classification: GAT handles cross-posts between unrelated subreddits."
+    },
+    {
+      "domain": "Inductive Learning on Growing Graphs",
+      "application": "Predict on new nodes without retraining",
+      "description": "Many real-world graphs grow over time: new users join social network, new papers published, new products added. GAT generalizes to unseen nodes (computes attention from features, not structure). GCN requires recomputing normalization for entire graph.",
+      "realWorldExample": "E-commerce recommendation: new products arrive daily. GAT trained on old products, predicts categories for new ones without retraining. LinkedIn: predict job recommendations for new users immediately after signup."
+    },
+    {
+      "domain": "Molecular Property Prediction with Interpretability",
+      "application": "Predict properties and explain which atoms/bonds matter",
+      "description": "Drug discovery: predict toxicity, solubility, binding affinity. GAT not only predicts but shows which atoms/bonds are critical via attention weights. Chemists can validate predictions, discover structure-property relationships.",
+      "realWorldExample": "Insilico Medicine uses GAT-based models for drug design. Attention weights highlight functional groups responsible for activity. OGB (Open Graph Benchmark) molecule datasets: GAT achieves competitive performance with interpretability."
+    },
+    {
+      "domain": "Heterogeneous Graphs (Multiple Node/Edge Types)",
+      "application": "Knowledge graphs, recommendation systems with diverse entities",
+      "description": "Real graphs have multiple entity types (users, items, tags) and relation types (likes, purchases, follows). Heterogeneous GAT (HAN, HGT) uses type-specific attention. Example: movie recommendation graph (users, movies, actors, genres).",
+      "realWorldExample": "Amazon product graph: users, products, brands, categories. Heterogeneous GAT for recommendation. Google Knowledge Graph: entities (people, places, events), relations (born_in, located_at). GAT for question answering."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "Cora (Citation Network)",
+        "otherMetrics": {
+          "Accuracy": "~83.0% (GAT with 8 heads)",
+          "vs_GCN": "+1.5% improvement",
+          "note": "GAT outperforms GCN by learning attention"
+        }
+      },
+      {
+        "name": "Citeseer (Citation Network)",
+        "otherMetrics": {
+          "Accuracy": "~72.5% (GAT)",
+          "vs_GCN": "+2.2% improvement",
+          "note": "Larger gain on noisier graph"
+        }
+      },
+      {
+        "name": "PubMed (Citation Network)",
+        "otherMetrics": {
+          "Accuracy": "~79.0% (GAT)",
+          "vs_GCN": "Similar to GCN",
+          "note": "Both perform well on clean graph"
+        }
+      },
+      {
+        "name": "PPI (Protein-Protein Interaction)",
+        "otherMetrics": {
+          "F1-Score": "~97.3% (inductive)",
+          "note": "GAT excels at inductive learning (unseen graphs)"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Number of Attention Heads",
+        "recommendedValue": "8 (first layer), 1 (output layer)",
+        "rationale": "More heads = more diverse patterns but higher memory. 8 heads is sweet spot. Final layer: 1 head with averaging (stable predictions). Tune in [4, 8, 16]."
+      },
+      {
+        "parameter": "Hidden Dimension per Head",
+        "recommendedValue": "8-16",
+        "rationale": "With K=8 heads, each head has d'=8 → total 64-dim. Smaller per-head dim encourages specialization. Total hidden = num_heads × hidden_per_head."
+      },
+      {
+        "parameter": "Dropout",
+        "recommendedValue": "0.6",
+        "rationale": "Higher than GCN (0.5) to prevent overfitting. Apply to features AND attention weights. Critical for small labeled sets."
+      },
+      {
+        "parameter": "Learning Rate",
+        "recommendedValue": "0.005 (Adam)",
+        "rationale": "Slightly lower than GCN (0.01) due to attention sensitivity. Weight decay = 5e-4. Early stopping patience = 100 epochs."
+      },
+      {
+        "parameter": "LeakyReLU Negative Slope",
+        "recommendedValue": "0.2",
+        "rationale": "For attention computation. Standard value. Allows small negative gradients (vs ReLU's zero)."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "High memory usage (especially multi-head)",
+        "solution": "Reduce number of heads (8→4). Use sparse attention (only top-k neighbors). Gradient checkpointing. For large graphs: use sampling (e.g., FastGAT, GATv2 with edge sampling)."
+      },
+      {
+        "problem": "Attention weights collapse (all similar values)",
+        "solution": "Increase dropout on attention (0.6-0.8). Use different initialization (Xavier/He). Try GATv2 (dynamic attention instead of static). Add attention regularization (entropy penalty)."
+      },
+      {
+        "problem": "Unstable training or NaN loss",
+        "solution": "Lower learning rate (0.005→0.001). Use gradient clipping (max_norm=1.0). Check for isolated nodes (add self-loops). Ensure adjacency matrix is correct (masked attention requires valid neighbors)."
+      },
+      {
+        "problem": "Worse than GCN on some datasets",
+        "solution": "GAT benefits from noisy/heterogeneous graphs. Clean graphs: GCN may suffice. Tune hyperparameters (heads, dropout). Try GATv2 (improved attention). Increase model depth (2→3 layers with residual connections)."
+      }
+    ]
+  },
+  "comparisons": ["gcn", "graphsage", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Graph Attention Networks",
+      "url": "https://arxiv.org/abs/1710.10903",
+      "description": "Original GAT paper (2017) by Veličković et al."
+    },
+    {
+      "type": "paper",
+      "title": "How Attentive are Graph Attention Networks?",
+      "url": "https://arxiv.org/abs/2105.14491",
+      "description": "GATv2 paper addressing attention limitations"
+    },
+    {
+      "type": "code",
+      "title": "PyTorch Geometric GATConv",
+      "url": "https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GATConv",
+      "description": "Official GAT implementation"
+    },
+    {
+      "type": "tutorial",
+      "title": "GAT Explained with Code",
+      "url": "https://docs.dgl.ai/en/latest/tutorials/models/1_gnn/9_gat.html",
+      "description": "DGL tutorial with step-by-step implementation"
+    }
+  ],
+  "tags": ["gat", "graph-attention", "attention-mechanism", "inductive-learning", "node-classification", "2017"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (Cora with 8 heads)",
+    "recommendedVRAM": "8 GB (large graphs or many heads)",
+    "trainingTime": {
+      "gpu": "2-5 minutes for Cora, 20-40 min for PPI"
+    },
+    "storageRequirements": "~1 MB (small model)"
+  }
+}

@@ -1,0 +1,208 @@
+{
+  "id": "perceptron",
+  "name": "Perceptron",
+  "category": "feedforward",
+  "subcategory": "basic",
+  "year": 1957,
+  "authors": ["Frank Rosenblatt"],
+  "paper": "The Perceptron: A Perceiving and Recognizing Automaton",
+  "paperUrl": "https://blogs.umass.edu/brain-wars/files/2016/03/rosenblatt-1957.pdf",
+  "description": "The Perceptron is the simplest form of a neural network - a single-layer binary classifier that learns to separate data into two classes. Invented by Frank Rosenblatt in 1957, it laid the foundation for all modern neural networks and deep learning.",
+  "plainEnglish": "Imagine a simple decision-maker that looks at several inputs and decides 'yes' or 'no'. For example, deciding if you should go outside based on: is it sunny? (weight: +0.8), is it raining? (weight: -0.9), is it warm? (weight: +0.5). The Perceptron adds up these weighted inputs and if the sum crosses a threshold, it says 'yes, go outside!'. Through training, it learns the perfect weights to make good decisions.",
+  "keyInnovation": "The first artificial neuron that could learn from examples using a simple weight update rule, proving that machines could learn and adapt - a revolutionary concept in 1957.",
+  "architecture": {
+    "layers": [
+      {
+        "type": "input",
+        "name": "Input Layer",
+        "params": {"features": "n"},
+        "outputShape": ["n"],
+        "description": "Accepts n input features"
+      },
+      {
+        "type": "fc",
+        "name": "Single Neuron",
+        "params": {"weights": "n", "bias": 1, "activation": "step"},
+        "outputShape": [1],
+        "description": "One neuron with n weights, a bias, and step activation function"
+      },
+      {
+        "type": "output",
+        "name": "Binary Output",
+        "params": {"classes": 2},
+        "outputShape": [1],
+        "description": "Outputs 0 or 1 (binary classification)"
+      }
+    ],
+    "parameters": 100,
+    "depth": 1,
+    "inputShape": [100],
+    "outputShape": [1]
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Linear Combination",
+        "latex": "z = w_1x_1 + w_2x_2 + ... + w_nx_n + b = \\sum_{i=1}^{n} w_ix_i + b",
+        "description": "Weighted sum of inputs plus bias term"
+      },
+      {
+        "name": "Step Activation Function",
+        "latex": "y = \\begin{cases} 1 & \\text{if } z \\geq 0 \\\\ 0 & \\text{if } z < 0 \\end{cases}",
+        "description": "Binary output based on whether weighted sum is positive or negative"
+      },
+      {
+        "name": "Perceptron Learning Rule",
+        "latex": "w_i \\leftarrow w_i + \\eta(y_{target} - y_{predicted})x_i",
+        "description": "Update each weight based on the error between target and prediction"
+      },
+      {
+        "name": "Bias Update",
+        "latex": "b \\leftarrow b + \\eta(y_{target} - y_{predicted})",
+        "description": "Update bias term based on prediction error"
+      }
+    ],
+    "forwardPass": [
+      "Receive input vector x = [x₁, x₂, ..., xₙ]",
+      "Compute weighted sum: z = Σ(wᵢ × xᵢ) + b",
+      "Apply step activation: y = 1 if z ≥ 0, else y = 0",
+      "Output binary prediction"
+    ],
+    "backpropagation": [
+      "Calculate error: e = y_target - y_predicted",
+      "For each weight: Δwᵢ = η × e × xᵢ",
+      "Update weights: wᵢ = wᵢ + Δwᵢ",
+      "Update bias: b = b + η × e"
+    ],
+    "lossFunction": "Binary Classification Error (0 or 1)"
+  },
+  "code": {
+    "pytorch": "import torch\nimport torch.nn as nn\n\nclass Perceptron(nn.Module):\n    \"\"\"\n    Simple Perceptron implementation for binary classification.\n    \n    The Perceptron is the simplest neural network - just one neuron!\n    It learns to separate two classes using a linear decision boundary.\n    \"\"\"\n    def __init__(self, input_size):\n        super(Perceptron, self).__init__()\n        # Single linear layer (one neuron)\n        # input_size -> 1 (binary output)\n        self.linear = nn.Linear(input_size, 1)\n        \n    def forward(self, x):\n        \"\"\"\n        Forward pass through the perceptron.\n        \n        Args:\n            x: Input tensor of shape (batch_size, input_size)\n            \n        Returns:\n            Binary predictions (0 or 1)\n        \"\"\"\n        # Compute weighted sum + bias\n        z = self.linear(x)\n        \n        # Apply step function (using sign for simplicity)\n        # In practice, we often use sigmoid and threshold at 0.5\n        output = torch.where(z >= 0, \n                           torch.ones_like(z), \n                           torch.zeros_like(z))\n        return output\n\n# Example usage\ndef train_perceptron():\n    # Create a simple dataset (AND gate)\n    X = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=torch.float32)\n    y = torch.tensor([[0], [0], [0], [1]], dtype=torch.float32)\n    \n    # Initialize perceptron\n    model = Perceptron(input_size=2)\n    \n    # Simple perceptron learning (no gradient descent needed!)\n    learning_rate = 0.1\n    epochs = 100\n    \n    for epoch in range(epochs):\n        # Forward pass\n        predictions = model(X)\n        \n        # Calculate error\n        errors = y - predictions\n        \n        # Manual weight update (Perceptron learning rule)\n        with torch.no_grad():\n            # Update weights: w = w + lr * error * input\n            weight_update = learning_rate * torch.matmul(errors.T, X)\n            model.linear.weight += weight_update\n            \n            # Update bias: b = b + lr * error\n            bias_update = learning_rate * errors.sum()\n            model.linear.bias += bias_update\n        \n        # Print progress\n        if (epoch + 1) % 20 == 0:\n            accuracy = (predictions == y).float().mean()\n            print(f'Epoch {epoch+1}: Accuracy = {accuracy.item():.2%}')\n    \n    # Final test\n    print('\\nFinal predictions:')\n    with torch.no_grad():\n        for i, (input_val, target) in enumerate(zip(X, y)):\n            pred = model(input_val.unsqueeze(0))\n            print(f'Input: {input_val.tolist()}, Target: {int(target)}, Prediction: {int(pred)}')\n    \n    return model\n\n# Modern approach using sigmoid and BCELoss\nclass ModernPerceptron(nn.Module):\n    \"\"\"Perceptron using sigmoid activation (differentiable)\"\"\"\n    def __init__(self, input_size):\n        super(ModernPerceptron, self).__init__()\n        self.linear = nn.Linear(input_size, 1)\n        self.sigmoid = nn.Sigmoid()\n        \n    def forward(self, x):\n        z = self.linear(x)\n        return self.sigmoid(z)\n\n# Train with gradient descent\ndef train_modern_perceptron():\n    X = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=torch.float32)\n    y = torch.tensor([[0], [0], [0], [1]], dtype=torch.float32)\n    \n    model = ModernPerceptron(input_size=2)\n    criterion = nn.BCELoss()\n    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)\n    \n    for epoch in range(1000):\n        # Forward pass\n        outputs = model(X)\n        loss = criterion(outputs, y)\n        \n        # Backward pass\n        optimizer.zero_grad()\n        loss.backward()\n        optimizer.step()\n        \n        if (epoch + 1) % 200 == 0:\n            print(f'Epoch {epoch+1}, Loss: {loss.item():.4f}')\n    \n    return model\n\n# Run training\nif __name__ == '__main__':\n    print('Classic Perceptron Training:')\n    classic_model = train_perceptron()\n    \n    print('\\n' + '='*50)\n    print('\\nModern Perceptron Training (with gradient descent):')\n    modern_model = train_modern_perceptron()",
+    "tensorflow": "import tensorflow as tf\nimport numpy as np\n\nclass Perceptron(tf.keras.Model):\n    \"\"\"\n    Simple Perceptron implementation in TensorFlow.\n    \n    The Perceptron is the foundation of neural networks - \n    a single neuron that learns a linear decision boundary.\n    \"\"\"\n    def __init__(self, input_dim):\n        super(Perceptron, self).__init__()\n        # Single dense layer with 1 unit (one neuron)\n        self.dense = tf.keras.layers.Dense(\n            units=1,\n            activation='sigmoid',  # Using sigmoid for differentiability\n            input_shape=(input_dim,)\n        )\n    \n    def call(self, inputs):\n        \"\"\"Forward pass through the perceptron\"\"\"\n        return self.dense(inputs)\n\n# Create and train a perceptron\ndef train_perceptron():\n    # Simple AND gate dataset\n    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=np.float32)\n    y = np.array([[0], [0], [0], [1]], dtype=np.float32)\n    \n    # Create model\n    model = Perceptron(input_dim=2)\n    \n    # Compile with binary crossentropy loss\n    model.compile(\n        optimizer=tf.keras.optimizers.SGD(learning_rate=0.1),\n        loss='binary_crossentropy',\n        metrics=['accuracy']\n    )\n    \n    # Train\n    history = model.fit(\n        X, y,\n        epochs=100,\n        verbose=0\n    )\n    \n    # Evaluate\n    predictions = model.predict(X)\n    print('\\nPerceptron Predictions:')\n    for i, (input_val, pred, target) in enumerate(zip(X, predictions, y)):\n        print(f'Input: {input_val}, Prediction: {pred[0]:.4f}, Target: {int(target[0])}')\n    \n    return model, history\n\n# Alternative: Using Sequential API\ndef create_perceptron_sequential(input_dim=2):\n    \"\"\"\n    Create a Perceptron using Keras Sequential API.\n    This is simpler for basic models.\n    \"\"\"\n    model = tf.keras.Sequential([\n        tf.keras.layers.Dense(\n            units=1,\n            activation='sigmoid',\n            input_shape=(input_dim,),\n            name='perceptron_neuron'\n        )\n    ])\n    \n    model.compile(\n        optimizer='sgd',\n        loss='binary_crossentropy',\n        metrics=['accuracy']\n    )\n    \n    return model\n\n# Example with visualization\ndef visualize_decision_boundary(model, X, y):\n    \"\"\"\n    Visualize the linear decision boundary learned by the perceptron.\n    \"\"\"\n    import matplotlib.pyplot as plt\n    \n    # Create mesh\n    h = 0.01\n    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5\n    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5\n    xx, yy = np.meshgrid(np.arange(x_min, x_max, h),\n                         np.arange(y_min, y_max, h))\n    \n    # Predict on mesh\n    Z = model.predict(np.c_[xx.ravel(), yy.ravel()])\n    Z = Z.reshape(xx.shape)\n    \n    # Plot\n    plt.contourf(xx, yy, Z, alpha=0.8, cmap=plt.cm.RdYlBu)\n    plt.scatter(X[:, 0], X[:, 1], c=y.ravel(), \n                edgecolors='black', cmap=plt.cm.RdYlBu)\n    plt.xlabel('Input 1')\n    plt.ylabel('Input 2')\n    plt.title('Perceptron Decision Boundary')\n    plt.show()\n\nif __name__ == '__main__':\n    # Train and evaluate\n    model, history = train_perceptron()\n    \n    print('\\nTraining complete!')\n    print(f'Final accuracy: {history.history[\"accuracy\"][-1]:.2%}')"
+  },
+  "useCases": [
+    {
+      "title": "Binary Classification Tasks",
+      "description": "The Perceptron excels at simple two-class classification problems where data is linearly separable.",
+      "examples": [
+        "Spam vs. Not Spam email classification (with linearly separable features)",
+        "Simple image classification (bright vs. dark images)",
+        "Binary sentiment analysis (positive vs. negative)",
+        "Logic gate implementation (AND, OR gates - but not XOR!)"
+      ],
+      "industry": "Machine Learning Education"
+    },
+    {
+      "title": "Educational Foundation",
+      "description": "Perfect for teaching the fundamentals of neural networks and machine learning.",
+      "examples": [
+        "Introduction to neural network concepts",
+        "Understanding weight updates and learning",
+        "Demonstrating linear separability",
+        "Teaching the limitations of simple models (XOR problem)"
+      ],
+      "industry": "Education"
+    },
+    {
+      "title": "Online Learning Systems",
+      "description": "Can adapt in real-time to new data points with its simple update rule.",
+      "examples": [
+        "Real-time binary classification",
+        "Adaptive filtering",
+        "Simple anomaly detection",
+        "Quick decision-making systems"
+      ],
+      "industry": "Real-time Systems"
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "AND Gate",
+        "accuracy": 100,
+        "otherMetrics": {"epochs_to_converge": 10}
+      },
+      {
+        "name": "OR Gate",
+        "accuracy": 100,
+        "otherMetrics": {"epochs_to_converge": 8}
+      },
+      {
+        "name": "XOR Gate",
+        "accuracy": 50,
+        "otherMetrics": {"note": "Cannot learn XOR (not linearly separable)"}
+      },
+      {
+        "name": "Iris Dataset (2 classes)",
+        "accuracy": 100,
+        "otherMetrics": {"note": "Only for setosa vs. others"}
+      }
+    ],
+    "performance": {
+      "speed": "Instant - microseconds per prediction",
+      "memory": "Minimal - only n weights + 1 bias",
+      "accuracy": "Perfect for linearly separable data, fails on non-linear problems"
+    }
+  },
+  "trainingTips": {
+    "hyperparameters": {
+      "learning_rate": "0.01 - 1.0 (typically 0.1)",
+      "epochs": "10-1000 (depends on convergence)",
+      "weight_initialization": "Random small values or zeros",
+      "bias_initialization": 0
+    },
+    "commonIssues": [
+      {
+        "problem": "Model not converging - weights keep oscillating",
+        "solution": "Reduce learning rate. Try 0.01 or 0.001. The Perceptron is sensitive to large learning rates."
+      },
+      {
+        "problem": "Cannot learn XOR or other non-linearly separable patterns",
+        "solution": "This is a fundamental limitation! Use MLP with hidden layers for non-linear problems."
+      },
+      {
+        "problem": "Training takes too long",
+        "solution": "Perceptron should converge quickly on linearly separable data. If not, data may not be linearly separable."
+      },
+      {
+        "problem": "Perfect training accuracy but poor test accuracy",
+        "solution": "Likely overfitting. Add regularization or use a simpler decision boundary."
+      }
+    ],
+    "dataRequirements": "Very small datasets work fine (even 10-100 samples). Data must be linearly separable for perfect accuracy.",
+    "trainingTime": "Seconds to minutes even on CPU. Usually converges in 10-100 epochs."
+  },
+  "comparisons": ["mlp", "logistic-regression", "svm"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "The Perceptron: A Perceiving and Recognizing Automaton",
+      "url": "https://blogs.umass.edu/brain-wars/files/2016/03/rosenblatt-1957.pdf",
+      "author": "Frank Rosenblatt"
+    },
+    {
+      "type": "paper",
+      "title": "Perceptrons (Minsky & Papert - showed limitations)",
+      "url": "https://mitpress.mit.edu/9780262631112/perceptrons/",
+      "author": "Marvin Minsky, Seymour Papert"
+    },
+    {
+      "type": "tutorial",
+      "title": "Understanding the Perceptron Algorithm",
+      "url": "https://towardsdatascience.com/perceptron-learning-algorithm-d5db0deab975"
+    },
+    {
+      "type": "blog",
+      "title": "The Perceptron: The First Neural Network",
+      "url": "https://sebastianraschka.com/Articles/2015_singlelayer_neurons.html"
+    }
+  ],
+  "tags": ["classification", "binary", "linear", "foundation", "single-layer", "historical"],
+  "difficulty": "Beginner",
+  "computationalRequirements": {
+    "minGPU": "None - CPU only",
+    "minRAM": "1MB",
+    "recommendedGPU": "Not needed",
+    "recommendedRAM": "1MB"
+  }
+}

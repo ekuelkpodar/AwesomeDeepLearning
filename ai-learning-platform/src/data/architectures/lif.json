@@ -1,0 +1,195 @@
+{
+  "id": "lif",
+  "name": "Leaky Integrate-and-Fire Neuron",
+  "category": "spiking",
+  "description": "Simplified spiking neuron model that integrates synaptic input until threshold, then fires a spike and resets. Foundation of most SNNs and neuromorphic systems.",
+  "icon": "zap",
+  "yearIntroduced": 1907,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "LIF Membrane Dynamics (Subthreshold)",
+        "latex": "\\tau_m \\frac{dv}{dt} = -(v - v_{rest}) + R I(t)",
+        "explanation": "THE CORE. First-order RC circuit model. v(t) leaks exponentially toward v_rest with time constant τ_m. Input current I(t) charges membrane. When v ≥ v_thresh: SPIKE! Then reset v → v_reset.",
+        "variables": {
+          "v(t)": "Membrane potential (voltage)",
+          "τ_m": "Membrane time constant (10-20ms in biology)",
+          "v_rest": "Resting potential (-70mV in biology, 0 in models)",
+          "R": "Membrane resistance",
+          "I(t)": "Input current (from synapses)"
+        }
+      },
+      {
+        "name": "Threshold Crossing & Reset",
+        "latex": "\\text{if } v(t) \\geq v_{thresh}: \\quad s(t) = 1, \\; v(t^+) = v_{reset}",
+        "explanation": "Spike generation. When v crosses threshold, emit spike s(t)=1, immediately reset v to v_reset (or v_rest). Refractory period (optional): neuron cannot spike for τ_ref ms.",
+        "variables": {
+          "s(t)": "Spike output (binary event)",
+          "v_thresh": "Spike threshold (typically 1.0 or -55mV)",
+          "v_reset": "Reset potential (often = v_rest)",
+          "t^+": "Time immediately after spike"
+        }
+      },
+      {
+        "name": "Analytical Solution (Constant Input)",
+        "latex": "v(t) = v_{rest} + R I (1 - e^{-t/\\tau_m})",
+        "explanation": "Closed-form solution for constant I. v approaches v_rest + RI asymptotically with time constant τ_m. Spike occurs when v_rest + RI ≥ v_thresh (if reachable).",
+        "variables": {
+          "RI": "Steady-state voltage shift",
+          "e^(-t/τ)": "Exponential approach to equilibrium"
+        }
+      },
+      {
+        "name": "Spike Response Model (SRM)",
+        "latex": "v(t) = \\eta(t - \\hat{t}) + \\sum_j w_j \\sum_f \\epsilon(t - t_j^{(f)})",
+        "explanation": "Alternative LIF formulation. η(t - t̂) = refractoriness kernel (post-spike reset). ε(t) = PSP kernel (synaptic input). Equivalent to LIF but easier for analysis.",
+        "variables": {
+          "η": "Reset kernel (exponential decay from spike)",
+          "ε": "Excitatory postsynaptic potential (EPSP) kernel",
+          "t̂": "Time of last spike",
+          "w_j": "Synaptic weight from neuron j"
+        }
+      },
+      {
+        "name": "Firing Rate (F-I Curve)",
+        "latex": "f(I) = \\begin{cases} 0 & \\text{if } I < I_{rheobase} \\\\ \\left[ \\tau_{ref} + \\tau_m \\log\\left(\\frac{RI}{RI - (v_{thresh} - v_{rest})}\\right) \\right]^{-1} & \\text{if } I \\geq I_{rheobase} \\end{cases}",
+        "explanation": "Steady-state firing rate vs input current. I_rheobase = minimum current to spike. Above rheobase, f increases logarithmically. Saturates at 1/τ_ref (max rate limited by refractoriness).",
+        "variables": {
+          "f(I)": "Firing rate (spikes/second)",
+          "I_rheobase": "Rheobase current (minimum to spike)",
+          "τ_ref": "Refractory period (limits max rate)"
+        }
+      },
+      {
+        "name": "Energy per Spike",
+        "latex": "E_{spike} = C_{mem} \\cdot (v_{thresh} - v_{reset})^2 \\approx 1-10 \\text{ pJ}",
+        "explanation": "Charging capacitor C_mem from v_reset to v_thresh costs energy. Real neurons: 1-10 pJ/spike (including ion pumps). Neuromorphic chips: 0.1-1 pJ/spike. Compare: ANN multiply-accumulate ≈ 1-10 pJ.",
+        "variables": {
+          "C_mem": "Membrane capacitance",
+          "E_spike": "Energy per action potential",
+          "pJ": "Picojoules (10^-12 J)"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "Current-Based LIF",
+        "description": "Synaptic input = instantaneous current I(t). Simple, fast simulation. Used in most SNNs."
+      },
+      {
+        "name": "Conductance-Based LIF",
+        "description": "Synaptic input modulates conductance g(t). I = g(E_syn - v). More bio-realistic (excitatory/inhibitory synapses)."
+      },
+      {
+        "name": "Adaptive LIF (AdEx)",
+        "description": "Adds adaptation current w(t) for spike-frequency adaptation. More expressive dynamics (bursting, adaptation)."
+      }
+    ]
+  },
+  "code": {
+    "framework": "NumPy (minimal)",
+    "implementation": "import numpy as np\nimport matplotlib.pyplot as plt\n\nclass LIFNeuron:\n    def __init__(self, tau_m=20.0, v_rest=0.0, v_thresh=1.0, v_reset=0.0, R=1.0):\n        \"\"\"\n        Leaky Integrate-and-Fire neuron.\n        \n        Args:\n            tau_m: Membrane time constant (ms)\n            v_rest: Resting potential\n            v_thresh: Spike threshold\n            v_reset: Reset potential\n            R: Membrane resistance\n        \"\"\"\n        self.tau_m = tau_m\n        self.v_rest = v_rest\n        self.v_thresh = v_thresh\n        self.v_reset = v_reset\n        self.R = R\n        \n        self.v = v_rest  # Current membrane potential\n        self.spike_times = []  # Record spike times\n    \n    def step(self, I, dt=0.1):\n        \"\"\"\n        Simulate one timestep.\n        \n        Args:\n            I: Input current\n            dt: Timestep (ms)\n        \n        Returns:\n            spike: 1 if neuron fired, 0 otherwise\n        \"\"\"\n        # Euler integration: dv/dt = -(v - v_rest)/tau_m + R*I/tau_m\n        dv = (-(self.v - self.v_rest) + self.R * I) / self.tau_m\n        self.v += dv * dt\n        \n        # Check threshold\n        if self.v >= self.v_thresh:\n            self.v = self.v_reset  # Reset\n            return 1  # Spike!\n        else:\n            return 0  # No spike\n    \n    def simulate(self, I_func, T=1000, dt=0.1):\n        \"\"\"\n        Simulate neuron over time.\n        \n        Args:\n            I_func: Function I(t) or constant current\n            T: Total time (ms)\n            dt: Timestep (ms)\n        \n        Returns:\n            t, v, spikes\n        \"\"\"\n        n_steps = int(T / dt)\n        t = np.arange(n_steps) * dt\n        v_trace = np.zeros(n_steps)\n        spikes = np.zeros(n_steps)\n        \n        self.v = self.v_rest  # Reset\n        \n        for i, time in enumerate(t):\n            # Get input current\n            I = I_func(time) if callable(I_func) else I_func\n            \n            # Simulate step\n            spike = self.step(I, dt)\n            \n            v_trace[i] = self.v\n            spikes[i] = spike\n        \n        return t, v_trace, spikes\n\n# Example 1: Constant input current\nneuron = LIFNeuron(tau_m=20.0, v_rest=0.0, v_thresh=1.0, v_reset=0.0)\nt, v, spikes = neuron.simulate(I_func=1.5, T=200, dt=0.1)\n\nfig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)\n\n# Membrane potential\nax1.plot(t, v, 'b-', linewidth=2)\nax1.axhline(y=1.0, color='r', linestyle='--', label='Threshold')\nax1.axhline(y=0.0, color='gray', linestyle=':', label='Rest')\nax1.set_ylabel('Membrane Potential v(t)')\nax1.legend()\nax1.grid(True, alpha=0.3)\n\n# Spike train\nspike_times = t[spikes == 1]\nax2.eventplot(spike_times, lineoffsets=0.5, linelengths=0.8, colors='red', linewidths=2)\nax2.set_ylim([0, 1])\nax2.set_xlabel('Time (ms)')\nax2.set_ylabel('Spikes')\nax2.set_yticks([])\nax2.grid(True, alpha=0.3)\n\nplt.tight_layout()\nplt.savefig('lif_constant_input.png', dpi=150)\nprint(f'Fired {len(spike_times)} spikes over {t[-1]:.0f} ms')\nprint(f'Firing rate: {len(spike_times) / (t[-1]/1000):.2f} Hz')\n\n# Example 2: Poisson input spikes (synaptic current)\ndef poisson_input(t, rate=50, tau_syn=5.0, w=0.1):\n    \"\"\"Generate Poisson spike train and convolve with exponential kernel.\"\"\"\n    # Simplified: random walk approximation\n    return np.random.poisson(rate * 0.001) * w\n\nneuron2 = LIFNeuron(tau_m=10.0)\nt2, v2, spikes2 = neuron2.simulate(I_func=lambda t: poisson_input(t), T=1000, dt=0.1)\n\n# F-I curve: firing rate vs input current\ncurrents = np.linspace(0, 3, 50)\nrates = []\n\nfor I in currents:\n    neuron_fi = LIFNeuron(tau_m=20.0)\n    _, _, spikes = neuron_fi.simulate(I_func=I, T=1000, dt=0.1)\n    rate = spikes.sum() / 1.0  # spikes per second\n    rates.append(rate)\n\nplt.figure(figsize=(8, 6))\nplt.plot(currents, rates, 'b-', linewidth=2)\nplt.xlabel('Input Current I', fontsize=12)\nplt.ylabel('Firing Rate (Hz)', fontsize=12)\nplt.title('F-I Curve: LIF Neuron Response', fontsize=14)\nplt.grid(True, alpha=0.3)\nplt.tight_layout()\nplt.savefig('lif_fi_curve.png', dpi=150)",
+    "keyComponents": [
+      "First-order differential equation (RC circuit)",
+      "Threshold crossing → spike → reset",
+      "Exponential leak toward resting potential",
+      "Minimal computational cost (1 ODE)"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Neuromorphic Hardware (Intel Loihi, IBM TrueNorth)",
+      "description": "LIF is the canonical neuron model in neuromorphic chips. Simple dynamics enable massively parallel hardware implementation (100K+ neurons/chip). On-chip STDP learning.",
+      "example": "Intel Loihi: 130K LIF neurons, 130M synapses, 60mW power"
+    },
+    {
+      "title": "Theoretical Neuroscience (Rate Coding Analysis)",
+      "description": "LIF as canonical model for theoretical analysis. F-I curves, population coding, balanced networks. Analytically tractable (Fokker-Planck equation for population dynamics).",
+      "example": "Balanced excitation-inhibition networks (van Vreeswijk & Sompolinsky 1996)"
+    },
+    {
+      "title": "Event-Based Signal Processing",
+      "description": "Convert analog signals to spike trains (sigma-delta modulation). LIF acts as temporal filter. Applications: neuromorphic audio (cochlea models), tactile sensing.",
+      "example": "NeuCube: EEG classification with LIF reservoir (85% accuracy)"
+    },
+    {
+      "title": "SNN Layers (Building Block)",
+      "description": "LIF neurons compose SNN layers. Feedforward (vision), recurrent (sequences), convolutional (spatiotemporal features). Trained with BPTT + surrogate gradients.",
+      "example": "snnTorch: LIF layers for MNIST (99.4% accuracy, 30μJ/inference)"
+    }
+  ],
+  "benchmarks": {
+    "Simulation Speed": "10M neuron-steps/sec on CPU (NumPy)",
+    "Hardware Efficiency": "0.1-1 pJ/spike on neuromorphic chips",
+    "Biological Realism": "Low (simplified from Hodgkin-Huxley)",
+    "Computational Cost": "~10 FLOPs per neuron per timestep",
+    "Expressiveness": "Limited (no bursting, adaptation without AdEx)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Choose τ_m based on timescale: 10ms for fast dynamics (vision), 20-50ms for sequences (speech)",
+      "reason": "τ_m controls temporal integration window. Longer τ_m = more memory, better for temporal patterns."
+    },
+    {
+      "tip": "Set v_thresh - v_rest ≈ 1.0 for normalized models. Biological: ~15mV above rest.",
+      "reason": "Threshold distance determines input gain. Too low = constant spiking. Too high = silent."
+    },
+    {
+      "tip": "Use dt=0.1-1.0ms for accurate simulation. Larger dt causes numerical instability.",
+      "reason": "Euler integration error ∝ dt. dt > τ_m/10 risks instability or missed spikes."
+    },
+    {
+      "tip": "Add refractory period τ_ref=2-5ms to limit max firing rate (more bio-realistic)",
+      "reason": "Prevents unrealistic high-frequency spiking. Biological neurons: absolute refractory ~2ms."
+    },
+    {
+      "tip": "For hardware deployment: quantize v to 8-16 bits, use integer arithmetic",
+      "reason": "Neuromorphic chips use fixed-point. Test quantization tolerance in simulation first."
+    }
+  ],
+  "comparisons": ["snn", "lstm", "hodgkin-huxley"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Lapicque's 1907 Paper (LIF Origin)",
+      "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2288650/",
+      "description": "Original integrate-and-fire model (translated)"
+    },
+    {
+      "type": "book",
+      "title": "Neuronal Dynamics (Gerstner et al.)",
+      "url": "https://neuronaldynamics.epfl.ch/",
+      "description": "Free online textbook, Chapters 1-5 on LIF"
+    },
+    {
+      "type": "tutorial",
+      "title": "LIF Tutorial (Brian2 Simulator)",
+      "url": "https://brian2.readthedocs.io/en/stable/examples/IF_curve_Hodgkin_Huxley.html",
+      "description": "Hands-on Python tutorial with Brian2"
+    },
+    {
+      "type": "paper",
+      "title": "Surrogate Gradient Learning in SNNs",
+      "url": "https://arxiv.org/abs/1901.09948",
+      "description": "How to train LIF networks with backprop"
+    },
+    {
+      "type": "code",
+      "title": "Norse: PyTorch SNN Library",
+      "url": "https://github.com/norse/norse",
+      "description": "High-performance LIF layers for PyTorch"
+    }
+  ],
+  "tags": ["lif", "spiking", "neuron-model", "neuromorphic", "integrate-and-fire", "1907"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "N/A (CPU simulation)",
+    "recommendedVRAM": "4 GB (for large SNN layers on GPU)",
+    "trainingTime": {
+      "simulation": "Real-time on CPU (1000 neurons)",
+      "mnist_snn": "30 min (100 timesteps, GPU)"
+    },
+    "typicalBatchSize": 32,
+    "notes": "Single LIF neuron is cheap (~10 FLOPs/step). Cost scales with num_neurons × num_timesteps. Neuromorphic chips run LIF 1000× more efficiently."
+  }
+}

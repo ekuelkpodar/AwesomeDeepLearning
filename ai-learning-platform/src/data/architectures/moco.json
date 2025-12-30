@@ -1,0 +1,102 @@
+{
+  "id": "moco",
+  "name": "MoCo (Momentum Contrast)",
+  "category": "self-supervised",
+  "description": "Self-supervised learning with a momentum encoder and memory queue. Builds a dynamic dictionary with consistent representations using a queue of negatives and slowly-progressing encoder.",
+  "icon": "database",
+  "yearIntroduced": 2020,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "InfoNCE Loss (Contrastive Loss)",
+        "latex": "\\mathcal{L}_q = -\\log \\frac{\\exp(q \\cdot k_+ / \\tau)}{\\sum_{i=0}^K \\exp(q \\cdot k_i / \\tau)}",
+        "explanation": "THE CORE. q = query (from encoder). k+ = positive key (same image, different aug). k_i = negative keys from queue (K samples, e.g., 65536). τ = temperature (0.07). Goal: classify positive among K negatives. Dictionary lookup!",
+        "variables": {
+          "q": "Query embedding (from query encoder)",
+          "k+": "Positive key (from momentum encoder)",
+          "k_i": "Negative keys (from queue)",
+          "K": "Queue size (e.g., 65536)",
+          "τ": "Temperature (0.07)"
+        }
+      },
+      {
+        "name": "Momentum Encoder Update",
+        "latex": "\\theta_k \\leftarrow m \\theta_k + (1 - m) \\theta_q",
+        "explanation": "Key encoder updated via momentum (NOT backprop). θ_q = query encoder (updated by SGD). θ_k = key encoder (momentum update). m = momentum coefficient (0.999). Slow update → consistent keys for queue. Key insight: consistency over batch.",
+        "variables": {
+          "θ_q": "Query encoder parameters (SGD)",
+          "θ_k": "Key encoder parameters (momentum)",
+          "m": "Momentum coefficient (0.999)"
+        }
+      },
+      {
+        "name": "Queue Update (FIFO)",
+        "latex": "\\text{Queue} \\leftarrow [k_1, k_2, \\ldots, k_K], \\quad \\text{enqueue}(k_{\\text{new}}), \\text{dequeue}(k_{\\text{old}})",
+        "explanation": "Queue stores K negative keys (e.g., 65536). FIFO: new keys enqueued, oldest dequeued. Decouples batch size from dictionary size! SimCLR needs 8K batch for 8K negatives. MoCo uses 256 batch + 65K queue. Memory bank without backprop.",
+        "variables": {
+          "K": "Queue size (65536 typical)",
+          "k_new": "New keys from current batch",
+          "k_old": "Oldest keys to remove",
+          "FIFO": "First In First Out"
+        }
+      },
+      {
+        "name": "Query Encoder Forward",
+        "latex": "q = f_q(x^q), \\quad x^q = \\text{aug}(x)",
+        "explanation": "Query encoder f_q: ResNet → 128-d embedding. x^q = augmented view. Backprop flows through f_q. Updated every iteration via SGD. Learns to classify positive among negatives.",
+        "variables": {
+          "f_q": "Query encoder (ResNet, updated by SGD)",
+          "x^q": "Query augmented view",
+          "q": "Query embedding (128-d)"
+        }
+      },
+      {
+        "name": "Key Encoder Forward",
+        "latex": "k = f_k(x^k), \\quad x^k = \\text{aug}(x), \\quad \\text{stop_gradient}(k)",
+        "explanation": "Key encoder f_k: same architecture as f_q (ResNet → 128-d). x^k = different augmented view. NO backprop through f_k! Gradients stopped. Updated only via momentum from f_q. Produces consistent keys.",
+        "variables": {
+          "f_k": "Key encoder (momentum update only)",
+          "x^k": "Key augmented view",
+          "k": "Key embedding (no gradient)"
+        }
+      },
+      {
+        "name": "Dictionary as Queue",
+        "latex": "\\text{Dictionary size} = K \\gg \\text{batch size } N",
+        "explanation": "Key advantage: large dictionary (65K) with small batch (256). Queue stores encoded keys from previous mini-batches. Momentum encoder ensures slow change → queue keys remain consistent. SimCLR can't do this (needs large batch).",
+        "variables": {
+          "K": "Queue size (65536)",
+          "N": "Batch size (256)",
+          "Consistency": "Momentum encoder prevents rapid drift"
+        }
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "# MoCo v2 implementation\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nfrom torchvision.models import resnet50\nfrom copy import deepcopy\n\nclass MoCo(nn.Module):\n    def __init__(self, base_encoder=resnet50, dim=128, K=65536, m=0.999, T=0.07):\n        \"\"\"\n        Args:\n            dim: Feature dimension (128)\n            K: Queue size (65536)\n            m: Momentum coefficient (0.999)\n            T: Temperature (0.07)\n        \"\"\"\n        super().__init__()\n        self.K = K\n        self.m = m\n        self.T = T\n        \n        # Query encoder\n        self.encoder_q = base_encoder(pretrained=False)\n        feature_dim = self.encoder_q.fc.in_features\n        self.encoder_q.fc = nn.Sequential(\n            nn.Linear(feature_dim, feature_dim),\n            nn.ReLU(),\n            nn.Linear(feature_dim, dim)\n        )\n        \n        # Key encoder (no gradient)\n        self.encoder_k = deepcopy(self.encoder_q)\n        for param in self.encoder_k.parameters():\n            param.requires_grad = False\n        \n        # Queue\n        self.register_buffer('queue', torch.randn(dim, K))\n        self.queue = F.normalize(self.queue, dim=0)\n        self.register_buffer('queue_ptr', torch.zeros(1, dtype=torch.long))\n    \n    @torch.no_grad()\n    def _momentum_update_key_encoder(self):\n        \"\"\"Momentum update: θ_k ← m*θ_k + (1-m)*θ_q.\"\"\"\n        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):\n            param_k.data = self.m * param_k.data + (1 - self.m) * param_q.data\n    \n    @torch.no_grad()\n    def _dequeue_and_enqueue(self, keys):\n        \"\"\"Update queue with new keys (FIFO).\"\"\"\n        batch_size = keys.shape[0]\n        ptr = int(self.queue_ptr)\n        \n        # Replace oldest keys\n        if ptr + batch_size <= self.K:\n            self.queue[:, ptr:ptr + batch_size] = keys.T\n        else:\n            # Wrap around\n            remaining = self.K - ptr\n            self.queue[:, ptr:] = keys[:remaining].T\n            self.queue[:, :batch_size - remaining] = keys[remaining:].T\n        \n        ptr = (ptr + batch_size) % self.K\n        self.queue_ptr[0] = ptr\n    \n    def forward(self, im_q, im_k):\n        \"\"\"\n        Args:\n            im_q: Query images (N, 3, 224, 224)\n            im_k: Key images (N, 3, 224, 224)\n        Returns:\n            logits, labels for contrastive loss\n        \"\"\"\n        # Query embeddings\n        q = self.encoder_q(im_q)  # (N, dim)\n        q = F.normalize(q, dim=1)\n        \n        # Key embeddings (no gradient)\n        with torch.no_grad():\n            self._momentum_update_key_encoder()\n            \n            k = self.encoder_k(im_k)  # (N, dim)\n            k = F.normalize(k, dim=1)\n        \n        # Positive logits: (N, 1)\n        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)\n        \n        # Negative logits: (N, K)\n        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])\n        \n        # Logits: (N, 1+K)\n        logits = torch.cat([l_pos, l_neg], dim=1)\n        logits /= self.T\n        \n        # Labels: positives are at index 0\n        labels = torch.zeros(logits.shape[0], dtype=torch.long, device=logits.device)\n        \n        # Update queue\n        self._dequeue_and_enqueue(k)\n        \n        return logits, labels\n\n# Training example\nmodel = MoCo(base_encoder=resnet50, dim=128, K=65536, m=0.999, T=0.07)\ncriterion = nn.CrossEntropyLoss()\noptimizer = torch.optim.SGD(model.parameters(), lr=0.03)\n\nfor im_q, im_k in dataloader:  # Two augmented views\n    logits, labels = model(im_q, im_k)\n    loss = criterion(logits, labels)\n    optimizer.zero_grad()\n    loss.backward()\n    optimizer.step()\n\n# After training, use encoder_q for downstream tasks",
+    "keyComponents": ["Query encoder (SGD)", "Key encoder (momentum)", "Queue (FIFO, size K)", "InfoNCE loss", "Momentum update"]
+  },
+  "useCases": [
+    {"title": "ImageNet Linear Eval", "description": "71.1% top-1 (MoCo v2) with smaller batches than SimCLR"},
+    {"title": "Object Detection", "description": "Outperforms supervised pretraining on COCO (40.9 AP vs 40.0)"},
+    {"title": "Instance Segmentation", "description": "Better transfer to COCO segmentation than supervised"},
+    {"title": "Memory-Efficient Training", "description": "Large dictionary (65K) with small batch (256)"}
+  ],
+  "benchmarks": {"ImageNet Top-1": "71.1% (MoCo v2, linear eval)", "Queue Size": "65536", "Batch Size": "256 (vs SimCLR 4096)", "Detection AP": "40.9 (COCO, surpasses supervised)"},
+  "trainingTips": [
+    {"tip": "Use large queue size K=65536", "reason": "More negatives improve performance. Queue decouples from batch size."},
+    {"tip": "Momentum m=0.999 (very high)", "reason": "Slow encoder update ensures queue consistency."},
+    {"tip": "Temperature T=0.07 (lower than SimCLR)", "reason": "Lower temperature focuses on hard negatives."},
+    {"tip": "MoCo v2: Add MLP projection head + stronger augmentation", "reason": "Incorporates SimCLR improvements. Boosts from 60.6% → 71.1%."},
+    {"tip": "Shuffle batch normalization for keys", "reason": "Prevents information leakage via BN statistics (distributed training)."}
+  ],
+  "comparisons": ["simclr", "byol", "resnet50"],
+  "resources": [
+    {"type": "paper", "title": "Momentum Contrast for Unsupervised Visual Representation Learning", "url": "https://arxiv.org/abs/1911.05722", "description": "Original MoCo (He et al., 2020)"},
+    {"type": "paper", "title": "Improved Baselines with Momentum Contrastive Learning", "url": "https://arxiv.org/abs/2003.04297", "description": "MoCo v2 with SimCLR improvements"}
+  ],
+  "tags": ["moco", "momentum", "contrastive", "queue", "2020"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {"minimumVRAM": "12 GB", "recommendedVRAM": "16 GB", "trainingTime": {"imagenet": "~200 epochs (~150 GPU-hours)"}, "typicalBatchSize": 256}
+}

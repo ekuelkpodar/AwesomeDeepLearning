@@ -1,0 +1,271 @@
+{
+  "id": "gpt",
+  "name": "GPT (Generative Pre-trained Transformer)",
+  "category": "transformer",
+  "subcategory": "Decoder-Only",
+  "year": 2018,
+  "authors": ["Alec Radford", "Karthik Narasimhan", "Tim Salimans", "Ilya Sutskever"],
+  "paper": "Improving Language Understanding by Generative Pre-training",
+  "paperUrl": "https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf",
+  "description": "GPT introduced the decoder-only Transformer architecture for language modeling, demonstrating that generative pre-training (predicting next words) transfers remarkably well to discriminative tasks. Unlike BERT's bidirectional masked prediction, GPT uses autoregressive (left-to-right) generation. This architectural choice enables text generation while still achieving strong understanding. GPT sparked the scaling paradigm: GPT-2 (1.5B params), GPT-3 (175B), GPT-4 (estimated 1.8T), showing that simply scaling model size, data, and compute leads to emergent capabilities.",
+  "plainEnglish": "GPT is like a student learning to write by reading billions of sentences and trying to predict what comes next. Given 'The cat sat on the', it learns to predict 'mat' (or 'chair', 'floor', etc.). This simple task—autoregressive language modeling—forces the model to learn grammar, facts, reasoning, even some common sense! The magic: after pre-training on internet text, GPT can be fine-tuned for ANY task by framing it as text generation. Translation? Generate French after seeing English. Summarization? Generate short text after seeing long text. Q&A? Generate answer after seeing question. GPT-3 discovered 'few-shot learning': just show a few examples in the prompt, no fine-tuning needed!",
+  "keyInnovation": "Decoder-only architecture with causal (left-to-right) attention enables both generation AND understanding from a single model. Generative pre-training objective (predict next token) is simpler than BERT's MLM but scales better and enables few-shot learning. The scaling hypothesis: language model performance improves predictably with model size, data size, and compute (power law). GPT-3 showed that at 175B parameters, emergent abilities appear: few-shot learning, basic reasoning, instruction following. This led to ChatGPT, GPT-4, and the era of large language models (LLMs).",
+  "architecture": {
+    "inputShape": [],
+    "outputShape": [],
+    "layers": [
+      {
+        "type": "embedding",
+        "name": "Token + Position Embeddings",
+        "description": "Learned token embeddings + learned positional embeddings (0 to context_length-1)",
+        "parameters": {
+          "vocab_size": 50257,
+          "d_model": 768,
+          "max_len": 1024
+        },
+        "parameterCount": 39222528
+      },
+      {
+        "type": "decoder",
+        "name": "Transformer Decoder Stack (12 layers)",
+        "description": "Each layer: Masked Multi-Head Self-Attention (12 heads) → Add&Norm → FFN → Add&Norm. No cross-attention (decoder-only).",
+        "parameters": {
+          "num_layers": 12,
+          "d_model": 768,
+          "num_heads": 12,
+          "d_ff": 3072,
+          "dropout": 0.1
+        },
+        "parameterCount": 85054464
+      },
+      {
+        "type": "lm_head",
+        "name": "Language Model Head",
+        "description": "Projects to vocabulary logits. Shares weights with input embeddings (weight tying).",
+        "parameters": {
+          "d_model": 768,
+          "vocab_size": 50257
+        },
+        "parameterCount": 0
+      }
+    ],
+    "depth": 12,
+    "parameters": 117210240,
+    "flops": "Variable (depends on sequence length)",
+    "memoryFootprint": "~469 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Autoregressive Language Modeling Loss",
+        "latex": "\\mathcal{L}_{LM} = -\\sum_{i=1}^{n} \\log P(x_i | x_{<i}; \\theta)",
+        "explanation": "THE CORE OBJECTIVE. Predict each token given all previous tokens (left-to-right). Causal masking ensures position i can only attend to positions <i. This is maximum likelihood estimation: learn a probability distribution over sequences that matches the training data distribution.",
+        "variables": {
+          "x_i": "Token at position i",
+          "x_{<i}": "All tokens before position i (context)",
+          "θ": "Model parameters",
+          "n": "Sequence length"
+        }
+      },
+      {
+        "name": "Causal Self-Attention Mask",
+        "latex": "\\text{mask}_{ij} = \\begin{cases} 0 & \\text{if } i < j \\\\ 1 & \\text{if } i \\geq j \\end{cases}",
+        "explanation": "Lower-triangular mask prevents attending to future tokens. Position i can only see positions ≤i. This maintains the autoregressive property: predictions depend only on past context.",
+        "variables": {
+          "i": "Query position",
+          "j": "Key position"
+        }
+      },
+      {
+        "name": "Next Token Prediction",
+        "latex": "P(x_i | x_{<i}) = \\text{softmax}(\\mathbf{W}_e \\mathbf{h}_i + \\mathbf{b})",
+        "explanation": "At each position, project hidden state to vocabulary size and softmax to get next-token probabilities. During generation, sample from this distribution (or use greedy/beam search).",
+        "variables": {
+          "h_i": "Hidden state at position i (from final layer)",
+          "W_e": "Output embedding matrix (often shared with input embeddings)"
+        }
+      },
+      {
+        "name": "Fine-tuning for Classification",
+        "latex": "P(y | x_1, ..., x_n) = \\text{softmax}(\\mathbf{W}_y \\mathbf{h}_n)",
+        "explanation": "For supervised tasks, take the final position's hidden state (after processing full input) and add a linear classifier. Fine-tune with task-specific loss.",
+        "variables": {
+          "h_n": "Hidden state at final position",
+          "y": "Class label",
+          "W_y": "Classification head weights"
+        }
+      },
+      {
+        "name": "Scaling Law (Chinchilla)",
+        "latex": "\\mathcal{L}(N, D) \\approx \\left(\\frac{N_c}{N}\\right)^{\\alpha_N} + \\left(\\frac{D_c}{D}\\right)^{\\alpha_D}",
+        "explanation": "Loss scales predictably with model size (N parameters) and data size (D tokens). Optimal compute allocation: scale N and D proportionally. Chinchilla (2022): models are undertrained—should use 20 tokens per parameter, not 300.",
+        "variables": {
+          "N": "Model parameters",
+          "D": "Training tokens",
+          "α_N, α_D": "Scaling exponents (~0.34, ~0.28)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "Scaling Laws",
+        "statement": "Language model loss scales as a power law in model size (N), dataset size (D), and compute (C): L(N) ∝ N^(-0.05 to -0.095). Performance improves predictably with scale.",
+        "significance": "Justifies massive investment in larger models. GPT-3's 175B parameters, GPT-4's trillions—all based on scaling laws showing bigger = better. Led to the LLM era."
+      },
+      {
+        "name": "Few-Shot Learning Emergence",
+        "statement": "At sufficient scale (~100B+ parameters), language models exhibit few-shot learning: perform tasks from prompt examples without gradient updates.",
+        "significance": "GPT-3 could translate, answer questions, write code from just 5-10 examples in the prompt. This 'in-context learning' wasn't explicitly trained—emerged from scale."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "from transformers import GPT2LMHeadModel, GPT2Tokenizer\nimport torch\n\n# Load pre-trained GPT-2\nmodel = GPT2LMHeadModel.from_pretrained('gpt2')  # 117M params\ntokenizer = GPT2Tokenizer.from_pretrained('gpt2')\n\n# Generation\nprompt = \"The future of artificial intelligence is\"\ninputs = tokenizer(prompt, return_tensors='pt')\n\nwith torch.no_grad():\n    outputs = model.generate(\n        inputs['input_ids'],\n        max_length=50,\n        num_return_sequences=1,\n        temperature=0.8,\n        top_p=0.9,\n        do_sample=True,\n        pad_token_id=tokenizer.eos_token_id\n    )\n\ngenerated = tokenizer.decode(outputs[0], skip_special_tokens=True)\nprint(f'Generated: {generated}')\n\n# Get logits for next token\nwith torch.no_grad():\n    output = model(**inputs)\n    next_token_logits = output.logits[0, -1, :]  # (vocab_size,)\n    probs = torch.softmax(next_token_logits, dim=0)\n    top5 = torch.topk(probs, 5)\n    \nprint('\\nTop 5 next tokens:')\nfor prob, idx in zip(top5.values, top5.indices):\n    print(f'{tokenizer.decode(idx):15} {prob:.3f}')"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Conversational AI",
+      "application": "ChatGPT, Claude, Gemini",
+      "description": "GPT architecture fine-tuned with RLHF (Reinforcement Learning from Human Feedback) to follow instructions and engage in dialogue. Handles open-ended conversations, coding help, creative writing, analysis.",
+      "realWorldExample": "ChatGPT reached 100M users in 2 months (fastest-growing app ever). Used by 180M+ weekly active users as of 2024. Claude (this conversation!) uses GPT-style decoder-only architecture."
+    },
+    {
+      "domain": "Code Generation",
+      "application": "GitHub Copilot, ChatGPT Code Interpreter",
+      "description": "GPT models trained on code (Codex) can generate functions, debug code, explain algorithms, and translate between programming languages.",
+      "realWorldExample": "GitHub Copilot (GPT-3.5 based) writes 40% of code in files where it's enabled. Used by 1.5M+ developers. Saves ~30% development time on repetitive tasks."
+    },
+    {
+      "domain": "Content Creation",
+      "application": "Writing assistance, marketing copy, creative stories",
+      "description": "GPT generates human-quality text for articles, emails, ads, stories. Can match style, tone, and format from examples.",
+      "realWorldExample": "Copy.ai, Jasper, Writesonic—all powered by GPT. Generate blog posts, product descriptions, social media content. $1B+ market."
+    },
+    {
+      "domain": "Education",
+      "application": "Tutoring, homework help, explanations",
+      "description": "GPT explains concepts, answers questions, provides step-by-step solutions. Can adapt to student level and learning style.",
+      "realWorldExample": "Khan Academy's Khanmigo uses GPT-4 for personalized tutoring. Duolingo Max uses GPT-4 for conversation practice and explanations."
+    },
+    {
+      "domain": "Research & Analysis",
+      "application": "Literature review, data analysis, hypothesis generation",
+      "description": "GPT can summarize papers, extract information, suggest experiments, and help with scientific writing.",
+      "realWorldExample": "Researchers use ChatGPT for brainstorming, writing assistance, and code for data analysis. Some journals now require AI usage disclosure."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "SuperGLUE (GPT-3)",
+        "accuracy": 71.8,
+        "otherMetrics": {
+          "note": "Few-shot (32 examples). Fine-tuned BERT: 69.0. GPT-3 beats fine-tuned models!"
+        }
+      },
+      {
+        "name": "LAMBADA (GPT-3)",
+        "accuracy": 86.4,
+        "otherMetrics": {
+          "note": "Zero-shot. Predicting last word of passages. Previous SOTA: 68%"
+        }
+      },
+      {
+        "name": "HumanEval (Codex/GPT-3.5)",
+        "otherMetrics": {
+          "pass@1": "48.1% (Codex 12B)",
+          "note": "Solving Python programming problems from docstrings"
+        }
+      },
+      {
+        "name": "MMLU (GPT-4)",
+        "accuracy": 86.4,
+        "otherMetrics": {
+          "note": "57 subjects (STEM, humanities, social sciences). Human expert: ~90%"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "Learning Rate Schedule",
+        "recommendedValue": "Cosine decay with warmup (2000 steps for GPT-2)",
+        "rationale": "Peak LR: 2.5e-4 for GPT-2. Decay to 10% of peak. Warmup stabilizes early training."
+      },
+      {
+        "parameter": "Batch Size",
+        "recommendedValue": "0.5M tokens per batch (GPT-3)",
+        "rationale": "Larger batches more stable but need proportionally larger LR. Use gradient accumulation if memory-limited."
+      },
+      {
+        "parameter": "Context Length",
+        "recommendedValue": "1024 (GPT-2), 2048 (GPT-3), 8k-128k (GPT-4)",
+        "rationale": "Longer context = more memory (quadratic). But enables better long-range understanding. Use efficient attention (Flash Attention) for long contexts."
+      },
+      {
+        "parameter": "Weight Decay",
+        "recommendedValue": "0.1",
+        "rationale": "Regularization crucial at scale. Applied to all weights except biases and layer norms."
+      },
+      {
+        "parameter": "Sampling Temperature",
+        "recommendedValue": "0.7-1.0 (creative), 0.1-0.3 (factual)",
+        "rationale": "Higher temperature = more random/creative. Lower = more deterministic/factual. T=0 is greedy decoding."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Repetitive or degenerate generation",
+        "solution": "Use nucleus sampling (top-p=0.9), temperature, and repetition penalty. Avoid greedy decoding for open-ended generation."
+      },
+      {
+        "problem": "Hallucinations (making up facts)",
+        "solution": "Inherent to language modeling objective. Mitigations: lower temperature, retrieval-augmented generation (RAG), human feedback (RLHF). Can't fully eliminate."
+      },
+      {
+        "problem": "Out of memory during training",
+        "solution": "Use gradient checkpointing (trades compute for memory), mixed precision (fp16/bf16), model parallelism (split across GPUs), or smaller model."
+      }
+    ]
+  },
+  "comparisons": ["transformer", "bert", "gpt2", "gpt3"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Improving Language Understanding by Generative Pre-training",
+      "url": "https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf",
+      "description": "Original GPT paper (2018) by Radford et al. (OpenAI)"
+    },
+    {
+      "type": "paper",
+      "title": "Language Models are Few-Shot Learners (GPT-3)",
+      "url": "https://arxiv.org/abs/2005.14165",
+      "description": "GPT-3 paper showing emergent few-shot learning at 175B scale"
+    },
+    {
+      "type": "blog",
+      "title": "The Illustrated GPT-2",
+      "url": "https://jalammar.github.io/illustrated-gpt2/",
+      "description": "Visual walkthrough of GPT architecture and generation process"
+    },
+    {
+      "type": "implementation",
+      "title": "nanoGPT",
+      "url": "https://github.com/karpathy/nanoGPT",
+      "description": "Minimal, hackable GPT implementation by Andrej Karpathy"
+    }
+  ],
+  "tags": ["nlp", "gpt", "transformer", "decoder", "autoregressive", "language-model", "generation", "2018"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB (GPT-2 Small 117M params)",
+    "recommendedVRAM": "24 GB (GPT-2 Large 774M), 80+ GB (GPT-3 scale training)",
+    "trainingTime": {
+      "gpu": "GPT-2: 1 week on 32 TPUv3. GPT-3: months on thousands of GPUs/TPUs"
+    },
+    "storageRequirements": "~500 MB (GPT-2 Small), ~3 GB (GPT-2 Large), ~350 GB (GPT-3)"
+  }
+}

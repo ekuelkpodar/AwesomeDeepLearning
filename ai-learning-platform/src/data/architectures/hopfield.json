@@ -1,0 +1,191 @@
+{
+  "id": "hopfield",
+  "name": "Hopfield Network",
+  "category": "energy-based",
+  "description": "Recurrent neural network with symmetric weights forming an associative memory. Stores patterns as attractors in energy landscape, enabling pattern completion and error correction.",
+  "icon": "brain",
+  "yearIntroduced": 1982,
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Energy Function (Lyapunov Function)",
+        "latex": "E(s) = -\\frac{1}{2} \\sum_{i,j} w_{ij} s_i s_j - \\sum_i \\theta_i s_i = -\\frac{1}{2} s^T W s - \\theta^T s",
+        "explanation": "THE CORE. Energy of binary state s ∈ {-1,+1}^n. W = symmetric weight matrix (w_ij = w_ji), θ = thresholds (biases). Stored patterns are local minima of E.",
+        "variables": {
+          "s": "Binary state vector (neuron activations)",
+          "W": "Symmetric weight matrix (no self-connections)",
+          "θ": "Threshold vector (biases)",
+          "E(s)": "Energy (decreases with async updates)"
+        }
+      },
+      {
+        "name": "Hebbian Learning Rule (Storage)",
+        "latex": "w_{ij} = \\frac{1}{N} \\sum_{\\mu=1}^{p} \\xi_i^\\mu \\xi_j^\\mu, \\quad w_{ii} = 0",
+        "explanation": "Store p patterns ξ^μ ∈ {-1,+1}^N. 'Neurons that fire together, wire together.' Outer product ξ^μ (ξ^μ)^T. Capacity: p_max ≈ 0.138N (15% rule).",
+        "variables": {
+          "ξ^μ": "μ-th stored pattern (N-dim binary vector)",
+          "p": "Number of stored patterns",
+          "N": "Number of neurons",
+          "w_ii": "No self-connections (zero diagonal)"
+        }
+      },
+      {
+        "name": "Asynchronous Update Rule",
+        "latex": "s_i(t+1) = \\text{sgn}\\left(\\sum_j w_{ij} s_j(t) - \\theta_i\\right) = \\text{sgn}(h_i)",
+        "explanation": "Update ONE neuron at a time (random or sequential). sgn(x) = +1 if x≥0, else -1. Guaranteed to converge to fixed point (E decreases or stays same).",
+        "variables": {
+          "h_i": "Local field (weighted sum of inputs)",
+          "sgn": "Sign function (threshold activation)",
+          "t": "Discrete time step"
+        }
+      },
+      {
+        "name": "Energy Decrease Theorem",
+        "latex": "\\Delta E = E(t+1) - E(t) = -\\Delta s_i \\cdot h_i \\leq 0",
+        "explanation": "Energy never increases with async updates! If s_i flips, ΔE = -Δs_i · h_i ≤ 0 (by update rule). Converges to local minimum (attractor). Synchronous updates can oscillate.",
+        "variables": {
+          "ΔE": "Energy change (non-positive)",
+          "Δs_i": "Change in neuron i state",
+          "h_i": "Local field at neuron i"
+        }
+      },
+      {
+        "name": "Capacity and Spurious States",
+        "latex": "p_{\\max} \\approx 0.138 N, \\quad \\text{# spurious states} \\approx 0.61 \\cdot 2^N",
+        "explanation": "Capacity limit: beyond 0.138N patterns, retrieval errors occur. Network also has spurious attractors (unwanted stable states). Modern Hopfield (2016) has exponential capacity!",
+        "variables": {
+          "p_max": "Maximum storable patterns",
+          "N": "Network size",
+          "spurious": "Unwanted attractors (mixtures of stored patterns)"
+        }
+      },
+      {
+        "name": "Modern Hopfield (Continuous)",
+        "latex": "E(\\xi, X) = -\\text{LSE}(\\beta X^T \\xi) + \\frac{1}{2} \\xi^T \\xi + \\beta^{-1} \\log M + const",
+        "explanation": "Modern variant (Ramsauer 2020). X = stored patterns (columns), ξ = query. LSE = logsumexp (softmax energy). Capacity: exponential in N! Used in Transformers (attention ≈ Hopfield).",
+        "variables": {
+          "X": "Matrix of stored patterns (N × M)",
+          "ξ": "Query/probe pattern",
+          "β": "Inverse temperature (sharpness)",
+          "LSE": "Log-sum-exp function"
+        }
+      }
+    ],
+    "architectures": [
+      {
+        "name": "Classic Hopfield (1982)",
+        "description": "Binary {-1,+1}, symmetric weights, async updates. Capacity 0.138N. Used for associative memory."
+      },
+      {
+        "name": "Continuous Hopfield (1984)",
+        "description": "Continuous activations s_i ∈ [0,1], sigmoid neurons. Energy still decreases. Used for optimization (TSP)."
+      },
+      {
+        "name": "Modern Hopfield (2016, 2020)",
+        "description": "Exponential capacity, continuous states. Equivalent to attention mechanism in Transformers!"
+      }
+    ]
+  },
+  "code": {
+    "framework": "PyTorch",
+    "implementation": "class HopfieldNetwork:\n    def __init__(self, n_neurons):\n        self.n_neurons = n_neurons\n        self.W = np.zeros((n_neurons, n_neurons))  # Weight matrix\n    \n    def train(self, patterns):\n        \"\"\"Store patterns using Hebbian rule.\n        patterns: (p, N) array of binary patterns in {-1, +1}\n        \"\"\"\n        p, N = patterns.shape\n        assert N == self.n_neurons\n        \n        # Hebbian learning: W = (1/N) * sum_μ ξ^μ (ξ^μ)^T\n        self.W = (1.0 / N) * patterns.T @ patterns\n        np.fill_diagonal(self.W, 0)  # No self-connections\n        \n        print(f'Stored {p} patterns. Capacity: ~{0.138 * N:.0f} patterns')\n    \n    def energy(self, state):\n        \"\"\"Compute energy E(s) = -0.5 * s^T W s.\"\"\"\n        return -0.5 * state @ self.W @ state\n    \n    def update_async(self, state, iterations=100):\n        \"\"\"Asynchronous update: flip one neuron at a time.\"\"\"\n        state = state.copy()\n        energies = [self.energy(state)]\n        \n        for _ in range(iterations):\n            # Pick random neuron\n            i = np.random.randint(self.n_neurons)\n            \n            # Compute local field h_i = sum_j w_ij s_j\n            h_i = self.W[i] @ state\n            \n            # Update: s_i = sgn(h_i)\n            state[i] = 1 if h_i >= 0 else -1\n            \n            energies.append(self.energy(state))\n            \n            # Check convergence (energy stable)\n            if len(energies) > 10 and np.allclose(energies[-10:], energies[-1]):\n                break\n        \n        return state, energies\n    \n    def recall(self, probe, iterations=100):\n        \"\"\"Pattern completion: start from noisy probe, converge to stored pattern.\"\"\"\n        return self.update_async(probe, iterations)\n\n# Example: Store and recall patterns\nimport numpy as np\nimport matplotlib.pyplot as plt\n\n# Create 5 random 10x10 binary patterns\nN = 100  # 10x10 images flattened\np = 5    # Store 5 patterns\npatterns = np.random.choice([-1, 1], size=(p, N))\n\n# Train Hopfield network\nnet = HopfieldNetwork(n_neurons=N)\nnet.train(patterns)\n\n# Test: Add noise to first pattern and try to recover\nprobe = patterns[0].copy()\nnoise_indices = np.random.choice(N, size=20, replace=False)  # Flip 20% of bits\nprobe[noise_indices] *= -1\n\nprint(f'Probe differs from original in {(probe != patterns[0]).sum()} positions')\n\n# Recall\nrecovered, energies = net.recall(probe, iterations=1000)\n\nprint(f'Recovered differs from original in {(recovered != patterns[0]).sum()} positions')\nprint(f'Converged in {len(energies)} iterations')\nprint(f'Energy decreased: {energies[0]:.2f} -> {energies[-1]:.2f}')\n\n# Visualize (if 10x10 image)\nfig, axes = plt.subplots(1, 3, figsize=(12, 4))\naxes[0].imshow(patterns[0].reshape(10, 10), cmap='gray')\naxes[0].set_title('Original Pattern')\naxes[1].imshow(probe.reshape(10, 10), cmap='gray')\naxes[1].set_title('Noisy Probe (20% flipped)')\naxes[2].imshow(recovered.reshape(10, 10), cmap='gray')\naxes[2].set_title('Recovered Pattern')\nplt.show()",
+    "keyComponents": [
+      "Symmetric weight matrix W (Hebbian learning)",
+      "Energy function E(s) = -0.5 s^T W s",
+      "Asynchronous update (guaranteed convergence)",
+      "Associative memory (pattern completion)"
+    ]
+  },
+  "useCases": [
+    {
+      "title": "Associative Memory (Pattern Completion)",
+      "description": "Store faces/letters, retrieve from partial/noisy input. Like 'autocomplete' for patterns. Used in early OCR systems (1980s-1990s).",
+      "example": "Store 10 letters, recover 'A' from 70% corrupted input"
+    },
+    {
+      "title": "Error Correction",
+      "description": "Store codewords, correct bit errors via convergence to nearest stored pattern. Similar to error-correcting codes but content-addressable.",
+      "example": "Correct 15% bit flips in transmitted binary data"
+    },
+    {
+      "title": "Optimization (Continuous Hopfield)",
+      "description": "Solve combinatorial optimization (TSP, graph coloring). Encode constraints in energy function, converge to local minimum. Rarely used (simulated annealing better).",
+      "example": "Traveling Salesman: 20-city tour (low quality solutions)"
+    },
+    {
+      "title": "Attention Mechanism (Modern Hopfield)",
+      "description": "Modern variant IS Transformer attention! Q=ξ (query), K=X (keys), softmax retrieval. Exponential capacity enables large-scale retrieval.",
+      "example": "Hopfield layers in Transformers (Ramsauer et al. 2020)"
+    }
+  ],
+  "benchmarks": {
+    "Capacity (Classic)": "~13.8% of N neurons (15 patterns for N=100)",
+    "Capacity (Modern)": "Exponential in N (can store 2^N patterns)",
+    "Noise Tolerance": "15-20% bit flips recoverable",
+    "Convergence": "10-100 iterations typical (async updates)",
+    "Inference Time": "Microseconds (100 neurons, CPU)"
+  },
+  "trainingTips": [
+    {
+      "tip": "Don't exceed p ≈ 0.138N stored patterns or retrieval fails",
+      "reason": "Beyond capacity, spurious attractors dominate and correct patterns unreachable."
+    },
+    {
+      "tip": "Use orthogonal or sparse patterns for better capacity",
+      "reason": "Random patterns interfere. Orthogonal patterns (ξ^μ · ξ^ν = 0) don't interfere."
+    },
+    {
+      "tip": "Async updates (one neuron at time) always converge. Sync updates can oscillate!",
+      "reason": "Energy theorem only holds for async. Sync can create limit cycles."
+    },
+    {
+      "tip": "For modern Hopfield, use higher β (inverse temperature) for sharper retrieval",
+      "reason": "β → ∞ makes retrieval exact (argmax). Low β spreads probability over patterns."
+    }
+  ],
+  "comparisons": ["rbm", "ebm", "autoencoder", "transformer"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Neural Networks and Physical Systems with Emergent Collective Computational Abilities",
+      "url": "https://www.pnas.org/doi/10.1073/pnas.79.8.2554",
+      "description": "Hopfield's original paper (PNAS 1982)"
+    },
+    {
+      "type": "paper",
+      "title": "Hopfield Networks is All You Need",
+      "url": "https://arxiv.org/abs/2008.02217",
+      "description": "Modern Hopfield networks = Attention (2020)"
+    },
+    {
+      "type": "tutorial",
+      "title": "Hopfield Networks (Scholarpedia)",
+      "url": "http://www.scholarpedia.org/article/Hopfield_network",
+      "description": "Comprehensive tutorial with proofs"
+    },
+    {
+      "type": "code",
+      "title": "Hopfield Network Visualization",
+      "url": "https://github.com/takyamamoto/Hopfield-Network",
+      "description": "Interactive Python implementation with plots"
+    },
+    {
+      "type": "book",
+      "title": "Neural Networks: A Comprehensive Foundation (Haykin)",
+      "url": "https://www.amazon.com/Neural-Networks-Comprehensive-Foundation-2nd/dp/0132733501",
+      "description": "Chapter 14: Neurodynamics (Hopfield networks)"
+    }
+  ],
+  "tags": ["hopfield", "associative-memory", "energy-based", "recurrent", "attractor", "1982"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minimumVRAM": "N/A (CPU-only, small scale)",
+    "recommendedVRAM": "1 GB (for modern Hopfield with 10K neurons)",
+    "trainingTime": {
+      "storage": "Instant (Hebbian rule is one-shot)",
+      "recall": "Milliseconds (100 neurons, 100 iterations)"
+    },
+    "typicalBatchSize": 1,
+    "notes": "Classic Hopfield is tiny (N < 1000). Modern Hopfield scales to millions (GPU required)."
+  }
+}

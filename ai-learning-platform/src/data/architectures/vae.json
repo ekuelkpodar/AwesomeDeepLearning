@@ -1,0 +1,281 @@
+{
+  "id": "vae",
+  "name": "VAE (Variational Autoencoder)",
+  "category": "autoencoder",
+  "subcategory": "Generative Models",
+  "year": 2013,
+  "authors": ["Diederik P. Kingma", "Max Welling"],
+  "paper": "Auto-Encoding Variational Bayes",
+  "paperUrl": "https://arxiv.org/abs/1312.6114",
+  "description": "VAE revolutionized generative modeling by combining variational inference with neural networks. Unlike vanilla autoencoders that learn deterministic mappings, VAEs learn probabilistic encoders and decoders. The encoder outputs parameters (mean and variance) of a distribution over latent codes rather than a single code. Sampling from this distribution enables generation of new data. The key innovation: the reparameterization trick allows backpropagation through stochastic sampling. VAEs balance reconstruction quality with learning smooth, structured latent spaces via the KL divergence term. This enables not just compression but true generative modeling—creating new samples, interpolating between examples, and disentangling factors of variation.",
+  "plainEnglish": "Imagine describing a face not with exact measurements, but with probability ranges: 'age is probably 25-35, smile intensity is likely 0.6-0.8.' That's what VAE's encoder does! Instead of encoding to a single point, it encodes to a distribution (Gaussian with mean μ and variance σ²). During training, we sample a random point from this distribution—adding controlled randomness. Why? Two reasons: (1) Forces the latent space to be continuous and smooth—nearby points decode to similar images. (2) Enables generation—sample random z from N(0,1), decode to get a new face! The loss has two parts: reconstruction (decode well) + KL divergence (keep encoded distributions close to N(0,1) so random sampling works). It's like learning a smooth probability landscape where every point represents a valid face.",
+  "keyInnovation": "Reparameterization trick makes stochastic nodes differentiable: instead of sampling z ~ N(μ, σ²) directly (non-differentiable), sample ε ~ N(0,1) and compute z = μ + σε (differentiable!). This allows backprop through random sampling. The ELBO (Evidence Lower Bound) loss combines reconstruction and KL divergence, approximating the true data likelihood. VAEs learn disentangled representations where latent dimensions capture independent factors (pose, lighting, identity). β-VAE improves disentanglement by weighting KL term. VAEs influenced modern generative AI: VQ-VAE for high-quality images, diffusion models use VAE-like encoders, DALL-E 2 uses VAE variants.",
+  "architecture": {
+    "inputShape": [784],
+    "outputShape": [784],
+    "layers": [
+      {
+        "type": "dense",
+        "name": "Encoder Hidden",
+        "description": "Shared encoder layers",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 200960
+      },
+      {
+        "type": "dense",
+        "name": "Encoder Mean (μ)",
+        "description": "Outputs mean of latent distribution",
+        "parameters": {
+          "units": 32,
+          "activation": "linear"
+        },
+        "parameterCount": 8224
+      },
+      {
+        "type": "dense",
+        "name": "Encoder Log-Variance (log σ²)",
+        "description": "Outputs log-variance of latent distribution",
+        "parameters": {
+          "units": 32,
+          "activation": "linear"
+        },
+        "parameterCount": 8224
+      },
+      {
+        "type": "sampling",
+        "name": "Reparameterization Trick",
+        "description": "Sample z = μ + σ * ε where ε ~ N(0,1)",
+        "parameters": {},
+        "parameterCount": 0
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Hidden",
+        "description": "Decoder layers",
+        "parameters": {
+          "units": 256,
+          "activation": "relu"
+        },
+        "parameterCount": 8448
+      },
+      {
+        "type": "dense",
+        "name": "Decoder Output",
+        "description": "Reconstruct to original dimension",
+        "parameters": {
+          "units": 784,
+          "activation": "sigmoid"
+        },
+        "parameterCount": 201488
+      }
+    ],
+    "depth": 5,
+    "parameters": 427344,
+    "flops": "~850K",
+    "memoryFootprint": "~1.7 MB (fp32)"
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Encoder Distribution",
+        "latex": "q_{\\phi}(\\mathbf{z}|\\mathbf{x}) = \\mathcal{N}(\\mathbf{z}; \\boldsymbol{\\mu}_{\\phi}(\\mathbf{x}), \\boldsymbol{\\sigma}_{\\phi}^2(\\mathbf{x}) \\mathbf{I})",
+        "explanation": "Encoder outputs parameters (μ, σ²) of a Gaussian distribution over latent codes, not a single code. This is the variational approximation to the true posterior p(z|x).",
+        "variables": {
+          "q_φ(z|x)": "Approximate posterior (encoder)",
+          "μ_φ(x)": "Mean vector from encoder",
+          "σ²_φ(x)": "Variance vector from encoder (diagonal covariance)"
+        }
+      },
+      {
+        "name": "Reparameterization Trick",
+        "latex": "\\mathbf{z} = \\boldsymbol{\\mu}_{\\phi}(\\mathbf{x}) + \\boldsymbol{\\sigma}_{\\phi}(\\mathbf{x}) \\odot \\boldsymbol{\\epsilon}, \\quad \\boldsymbol{\\epsilon} \\sim \\mathcal{N}(0, \\mathbf{I})",
+        "explanation": "THE KEY TRICK. Rewrite sampling as deterministic function of random noise ε. Gradients flow through μ and σ, enabling backprop. Without this, sampling would block gradients.",
+        "variables": {
+          "ε": "Standard normal noise N(0,I)",
+          "⊙": "Element-wise multiplication"
+        }
+      },
+      {
+        "name": "Decoder Distribution",
+        "latex": "p_{\\theta}(\\mathbf{x}|\\mathbf{z}) = \\mathcal{N}(\\mathbf{x}; \\boldsymbol{\\mu}_{\\theta}(\\mathbf{z}), \\mathbf{I}) \\text{ or Bernoulli}(\\mathbf{x}; \\mathbf{p}_{\\theta}(\\mathbf{z}))",
+        "explanation": "Decoder defines likelihood of data given latent code. For continuous data: Gaussian (MSE loss). For binary: Bernoulli (BCE loss). Decoder outputs distribution parameters.",
+        "variables": {
+          "p_θ(x|z)": "Likelihood (decoder)",
+          "μ_θ(z)": "Reconstruction mean"
+        }
+      },
+      {
+        "name": "ELBO (Evidence Lower Bound)",
+        "latex": "\\mathcal{L}(\\theta, \\phi; \\mathbf{x}) = \\mathbb{E}_{q_{\\phi}(\\mathbf{z}|\\mathbf{x})}[\\log p_{\\theta}(\\mathbf{x}|\\mathbf{z})] - D_{KL}(q_{\\phi}(\\mathbf{z}|\\mathbf{x}) || p(\\mathbf{z}))",
+        "explanation": "THE VAE LOSS. First term: reconstruction quality (how well decoder reconstructs from sampled z). Second term: KL divergence regularizer (keep encoder distribution close to prior N(0,I)). Maximizing ELBO ≈ maximizing log-likelihood.",
+        "variables": {
+          "E[log p(x|z)]": "Expected reconstruction log-likelihood",
+          "D_KL": "KL divergence between encoder output and N(0,I) prior"
+        }
+      },
+      {
+        "name": "KL Divergence (Closed Form for Gaussians)",
+        "latex": "D_{KL}(\\mathcal{N}(\\boldsymbol{\\mu}, \\boldsymbol{\\sigma}^2) || \\mathcal{N}(0, 1)) = \\frac{1}{2} \\sum_{j=1}^{J} (\\mu_j^2 + \\sigma_j^2 - \\log \\sigma_j^2 - 1)",
+        "explanation": "Closed-form KL for Gaussian encoder to standard normal prior. Penalizes deviations from N(0,1). This regularizer ensures smooth latent space: similar z decode to similar x. Enables generation by sampling z ~ N(0,1).",
+        "variables": {
+          "J": "Latent dimension",
+          "μ_j, σ²_j": "Mean and variance of j-th latent dimension"
+        }
+      },
+      {
+        "name": "β-VAE Loss",
+        "latex": "\\mathcal{L}_{\\beta-VAE} = \\mathbb{E}[\\log p(\\mathbf{x}|\\mathbf{z})] - \\beta D_{KL}(q(\\mathbf{z}|\\mathbf{x}) || p(\\mathbf{z}))",
+        "explanation": "Weighted KL term. β > 1 encourages disentanglement (independent latent dimensions capture independent factors). β < 1 improves reconstruction. Trade-off between reconstruction quality and latent structure.",
+        "variables": {
+          "β": "Weight on KL term (1.0 for standard VAE, 4-10 for disentanglement)"
+        }
+      }
+    ],
+    "keyTheorems": [
+      {
+        "name": "ELBO is a Lower Bound",
+        "statement": "The ELBO is a lower bound on the log marginal likelihood: log p(x) ≥ ELBO. Maximizing ELBO approximates maximum likelihood.",
+        "significance": "Justifies VAE training. The gap is the KL between true and approximate posterior. Tighter bound → better approximation."
+      },
+      {
+        "name": "Disentanglement (β-VAE)",
+        "statement": "Increasing β encourages statistically independent latent dimensions that capture independent generative factors.",
+        "significance": "Enables interpretable latent spaces. Change one z_j → change one property (e.g., rotation). Critical for controllable generation."
+      }
+    ]
+  },
+  "code": {
+    "pytorch": {
+      "minimal": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass VAE(nn.Module):\n    def __init__(self, input_dim=784, latent_dim=32):\n        super().__init__()\n        # Encoder\n        self.fc1 = nn.Linear(input_dim, 256)\n        self.fc_mu = nn.Linear(256, latent_dim)\n        self.fc_logvar = nn.Linear(256, latent_dim)\n        \n        # Decoder\n        self.fc3 = nn.Linear(latent_dim, 256)\n        self.fc4 = nn.Linear(256, input_dim)\n    \n    def encode(self, x):\n        h = F.relu(self.fc1(x))\n        mu = self.fc_mu(h)\n        logvar = self.fc_logvar(h)\n        return mu, logvar\n    \n    def reparameterize(self, mu, logvar):\n        # z = mu + sigma * epsilon\n        std = torch.exp(0.5 * logvar)  # sigma = exp(0.5 * log(sigma^2))\n        eps = torch.randn_like(std)    # epsilon ~ N(0, 1)\n        return mu + eps * std\n    \n    def decode(self, z):\n        h = F.relu(self.fc3(z))\n        return torch.sigmoid(self.fc4(h))\n    \n    def forward(self, x):\n        mu, logvar = self.encode(x)\n        z = self.reparameterize(mu, logvar)\n        return self.decode(z), mu, logvar\n\ndef vae_loss(x_recon, x, mu, logvar, beta=1.0):\n    # Reconstruction loss (BCE)\n    recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum')\n    \n    # KL divergence loss\n    kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())\n    \n    return recon_loss + beta * kl_loss\n\n# Training\nmodel = VAE()\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-3)\n\nfor epoch in range(100):\n    for data in dataloader:\n        x = data[0].view(-1, 784)\n        \n        # Forward\n        x_recon, mu, logvar = model(x)\n        loss = vae_loss(x_recon, x, mu, logvar)\n        \n        # Backward\n        optimizer.zero_grad()\n        loss.backward()\n        optimizer.step()\n    \n    print(f'Epoch {epoch}, Loss: {loss.item():.4f}')\n\n# Generation\nwith torch.no_grad():\n    z = torch.randn(64, 32)  # Sample from N(0,1)\n    samples = model.decode(z)\n    # samples contains 64 generated images"
+    }
+  },
+  "useCases": [
+    {
+      "domain": "Image Generation",
+      "application": "Generating new images, faces, art",
+      "description": "Sample z ~ N(0,1), decode to generate new images. Smooth latent space enables interpolation between images. Can condition on labels (CVAE) for controlled generation.",
+      "realWorldExample": "NVIDIA's StyleGAN uses VAE-like ideas. DALL-E uses discrete VAE (dVAE) to compress images. VQ-VAE-2 generates high-quality 1024×1024 images."
+    },
+    {
+      "domain": "Drug Discovery",
+      "application": "Molecular generation and optimization",
+      "description": "Encode molecules to latent space, decode to generate new molecules with desired properties. Navigate latent space to optimize drug candidates.",
+      "realWorldExample": "Insilico Medicine uses VAEs to generate novel drug molecules. Generated drugs entered clinical trials in 2023, taking <18 months vs typical 4-5 years."
+    },
+    {
+      "domain": "Anomaly Detection",
+      "application": "Fraud, defect, and outlier detection",
+      "description": "Like vanilla AE but probabilistic. Anomalies have low likelihood under learned model. Combine reconstruction error + KL for anomaly score.",
+      "realWorldExample": "Used in cybersecurity for intrusion detection, in manufacturing for quality control. Better uncertainty estimates than vanilla AE."
+    },
+    {
+      "domain": "Data Augmentation",
+      "application": "Generating training data for rare classes",
+      "description": "Learn latent space of data, sample to generate synthetic examples. Helps with class imbalance and data scarcity.",
+      "realWorldExample": "Medical imaging: generate synthetic MRI scans for rare diseases to train diagnostic models. Privacy-preserving: generate synthetic patient data."
+    },
+    {
+      "domain": "Representation Learning",
+      "application": "Disentangled features for downstream tasks",
+      "description": "β-VAE learns disentangled representations where each latent dimension captures one factor (color, shape, position). Useful for interpretability and transfer learning.",
+      "realWorldExample": "Robotics: learn disentangled representations of object properties for manipulation. RL: disentangle state factors for better generalization."
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {
+        "name": "MNIST",
+        "otherMetrics": {
+          "FID": "~50-80 (higher is worse)",
+          "note": "Generates recognizable digits but blurrier than GANs"
+        }
+      },
+      {
+        "name": "CelebA (Faces)",
+        "otherMetrics": {
+          "FID": "~40-60",
+          "note": "VQ-VAE achieves FID ~30, approaching GAN quality"
+        }
+      },
+      {
+        "name": "dSprites (Disentanglement)",
+        "otherMetrics": {
+          "MIG": "~0.3-0.5 (β-VAE with β=4)",
+          "note": "Mutual Information Gap measures disentanglement"
+        }
+      }
+    ]
+  },
+  "trainingTips": {
+    "hyperparameters": [
+      {
+        "parameter": "β (KL Weight)",
+        "recommendedValue": "1.0 (standard), 4-10 (disentanglement), 0.1-0.5 (better reconstruction)",
+        "rationale": "Trade-off: higher β = more disentangled but blurrier. Lower β = sharper but entangled. Start with 1.0."
+      },
+      {
+        "parameter": "Latent Dimension",
+        "recommendedValue": "8-512 depending on data",
+        "rationale": "MNIST: 8-32, Faces: 128-512. Larger allows more expressive but may not disentangle well."
+      },
+      {
+        "parameter": "KL Annealing",
+        "recommendedValue": "Start β=0, increase to 1 over 10-20 epochs",
+        "rationale": "Prevents posterior collapse. Let encoder learn before enforcing N(0,1) prior."
+      },
+      {
+        "parameter": "Free Bits",
+        "recommendedValue": "λ = 2-4 nats per dimension",
+        "rationale": "Min KL per dimension. Prevents dimensions from collapsing to zero variance."
+      }
+    ],
+    "commonIssues": [
+      {
+        "problem": "Posterior collapse (KL → 0, decoder ignores z)",
+        "solution": "Use KL annealing, start β=0 and increase gradually. Add free bits constraint. Use stronger decoder. Check if latents are being used (log σ² should vary)."
+      },
+      {
+        "problem": "Blurry generations",
+        "solution": "Inherent to VAEs with MSE/BCE loss (they model averages). Solutions: (1) Use VQ-VAE for discrete latents, (2) Add perceptual loss, (3) Combine with GAN (VAE-GAN), (4) Use diffusion models instead."
+      },
+      {
+        "problem": "Poor disentanglement",
+        "solution": "Increase β (try 4-10). Use more latent dims than needed. Ensure diverse training data. Try FactorVAE or β-TCVAE for better disentanglement."
+      }
+    ]
+  },
+  "comparisons": ["autoencoder", "gan", "vq-vae", "diffusion"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Auto-Encoding Variational Bayes",
+      "url": "https://arxiv.org/abs/1312.6114",
+      "description": "Original 2013 VAE paper by Kingma & Welling"
+    },
+    {
+      "type": "paper",
+      "title": "β-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework",
+      "url": "https://openreview.net/forum?id=Sy2fzU9gl",
+      "description": "Introduced β-VAE for disentangled representations"
+    },
+    {
+      "type": "blog",
+      "title": "Tutorial on Variational Autoencoders",
+      "url": "https://arxiv.org/abs/1606.05908",
+      "description": "Comprehensive tutorial by Carl Doersch"
+    }
+  ],
+  "tags": ["vae", "variational", "generative", "probabilistic", "unsupervised", "2013"],
+  "difficulty": "Advanced",
+  "computationalRequirements": {
+    "minimumVRAM": "4 GB",
+    "recommendedVRAM": "8 GB for image generation",
+    "trainingTime": {
+      "gpu": "10-30 minutes on MNIST, 2-4 hours on CelebA"
+    },
+    "storageRequirements": "~5-50 MB"
+  }
+}
