@@ -1,0 +1,153 @@
+{
+  "id": "resnet50",
+  "name": "ResNet-50",
+  "category": "cnn",
+  "subcategory": "residual",
+  "year": 2015,
+  "authors": ["Kaiming He", "Xiangyu Zhang", "Shaoqing Ren", "Jian Sun"],
+  "paper": "Deep Residual Learning for Image Recognition",
+  "paperUrl": "https://arxiv.org/abs/1512.03385",
+  "description": "ResNet-50 is a 50-layer deep convolutional neural network that uses residual connections (skip connections) to enable training of very deep networks. It won the ImageNet 2015 competition and revolutionized deep learning by solving the vanishing gradient problem in deep networks.",
+  "plainEnglish": "Imagine trying to learn something complex by building on what you already know, rather than starting from scratch each time. ResNet does exactly that - it learns 'residuals' (the differences) rather than complete transformations at each layer. The skip connections allow information to bypass layers, making it easier to train networks with 50, 100, or even 152 layers.",
+  "keyInnovation": "Residual connections (skip connections) that allow gradients to flow directly through the network, enabling training of networks with 100+ layers without degradation.",
+  "architecture": {
+    "layers": [
+      {"type": "conv", "name": "Conv1", "params": {"filters": 64, "kernel_size": 7, "stride": 2}, "outputShape": [112, 112, 64]},
+      {"type": "maxpool", "name": "MaxPool1", "params": {"pool_size": 3, "stride": 2}, "outputShape": [56, 56, 64]},
+      {"type": "residual_block", "name": "Conv2_x", "params": {"blocks": 3, "filters": [64, 64, 256]}, "outputShape": [56, 56, 256]},
+      {"type": "residual_block", "name": "Conv3_x", "params": {"blocks": 4, "filters": [128, 128, 512]}, "outputShape": [28, 28, 512]},
+      {"type": "residual_block", "name": "Conv4_x", "params": {"blocks": 6, "filters": [256, 256, 1024]}, "outputShape": [14, 14, 1024]},
+      {"type": "residual_block", "name": "Conv5_x", "params": {"blocks": 3, "filters": [512, 512, 2048]}, "outputShape": [7, 7, 2048]},
+      {"type": "avgpool", "name": "AvgPool", "params": {"pool_size": 7}, "outputShape": [1, 1, 2048]},
+      {"type": "fc", "name": "FC", "params": {"units": 1000}, "outputShape": [1000]}
+    ],
+    "parameters": 25557032,
+    "depth": 50,
+    "inputShape": [224, 224, 3],
+    "outputShape": [1000]
+  },
+  "mathematics": {
+    "equations": [
+      {
+        "name": "Residual Block",
+        "latex": "y = F(x, \\{W_i\\}) + x",
+        "description": "The output is the learned residual F(x) plus the identity mapping x"
+      },
+      {
+        "name": "Bottleneck Block",
+        "latex": "F(x) = W_3 \\sigma(W_2 \\sigma(W_1 x))",
+        "description": "Three convolutional layers: 1x1 (reduce), 3x3 (process), 1x1 (expand)"
+      },
+      {
+        "name": "Skip Connection",
+        "latex": "\\frac{\\partial L}{\\partial x} = \\frac{\\partial L}{\\partial y}(1 + \\frac{\\partial F}{\\partial x})",
+        "description": "Gradient can flow directly through skip connections"
+      }
+    ],
+    "forwardPass": [
+      "Input image (224×224×3)",
+      "Conv1: 7×7 conv, 64 filters, stride 2",
+      "MaxPool: 3×3 pool, stride 2",
+      "Residual blocks with bottleneck design",
+      "Global average pooling",
+      "Fully connected layer (1000 classes)",
+      "Softmax activation"
+    ],
+    "backpropagation": [
+      "Compute loss gradient",
+      "Gradients flow through skip connections",
+      "Update weights using SGD or Adam",
+      "Skip connections prevent vanishing gradients"
+    ],
+    "lossFunction": "Categorical Cross-Entropy"
+  },
+  "code": {
+    "pytorch": "import torch\nimport torch.nn as nn\n\nclass Bottleneck(nn.Module):\n    expansion = 4\n    \n    def __init__(self, in_channels, out_channels, stride=1, downsample=None):\n        super(Bottleneck, self).__init__()\n        # 1x1 convolution (reduce dimensions)\n        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)\n        self.bn1 = nn.BatchNorm2d(out_channels)\n        \n        # 3x3 convolution (process)\n        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, \n                               stride=stride, padding=1, bias=False)\n        self.bn2 = nn.BatchNorm2d(out_channels)\n        \n        # 1x1 convolution (expand dimensions)\n        self.conv3 = nn.Conv2d(out_channels, out_channels * self.expansion, \n                               kernel_size=1, bias=False)\n        self.bn3 = nn.BatchNorm2d(out_channels * self.expansion)\n        \n        self.relu = nn.ReLU(inplace=True)\n        self.downsample = downsample\n    \n    def forward(self, x):\n        identity = x\n        \n        # Bottleneck pathway\n        out = self.conv1(x)\n        out = self.bn1(out)\n        out = self.relu(out)\n        \n        out = self.conv2(out)\n        out = self.bn2(out)\n        out = self.relu(out)\n        \n        out = self.conv3(out)\n        out = self.bn3(out)\n        \n        # Skip connection\n        if self.downsample is not None:\n            identity = self.downsample(x)\n        \n        out += identity  # Add skip connection\n        out = self.relu(out)\n        \n        return out\n\nclass ResNet50(nn.Module):\n    def __init__(self, num_classes=1000):\n        super(ResNet50, self).__init__()\n        self.in_channels = 64\n        \n        # Initial convolution\n        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)\n        self.bn1 = nn.BatchNorm2d(64)\n        self.relu = nn.ReLU(inplace=True)\n        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)\n        \n        # Residual blocks\n        self.layer1 = self._make_layer(Bottleneck, 64, 3, stride=1)\n        self.layer2 = self._make_layer(Bottleneck, 128, 4, stride=2)\n        self.layer3 = self._make_layer(Bottleneck, 256, 6, stride=2)\n        self.layer4 = self._make_layer(Bottleneck, 512, 3, stride=2)\n        \n        # Classification head\n        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))\n        self.fc = nn.Linear(512 * Bottleneck.expansion, num_classes)\n    \n    def _make_layer(self, block, out_channels, blocks, stride=1):\n        downsample = None\n        if stride != 1 or self.in_channels != out_channels * block.expansion:\n            downsample = nn.Sequential(\n                nn.Conv2d(self.in_channels, out_channels * block.expansion,\n                         kernel_size=1, stride=stride, bias=False),\n                nn.BatchNorm2d(out_channels * block.expansion)\n            )\n        \n        layers = []\n        layers.append(block(self.in_channels, out_channels, stride, downsample))\n        self.in_channels = out_channels * block.expansion\n        \n        for _ in range(1, blocks):\n            layers.append(block(self.in_channels, out_channels))\n        \n        return nn.Sequential(*layers)\n    \n    def forward(self, x):\n        # Initial layers\n        x = self.conv1(x)\n        x = self.bn1(x)\n        x = self.relu(x)\n        x = self.maxpool(x)\n        \n        # Residual blocks\n        x = self.layer1(x)\n        x = self.layer2(x)\n        x = self.layer3(x)\n        x = self.layer4(x)\n        \n        # Classification\n        x = self.avgpool(x)\n        x = torch.flatten(x, 1)\n        x = self.fc(x)\n        \n        return x\n\n# Usage\nmodel = ResNet50(num_classes=1000)\nprint(f'Total parameters: {sum(p.numel() for p in model.parameters()):,}')",
+    "tensorflow": "import tensorflow as tf\nfrom tensorflow.keras import layers, Model\n\ndef identity_block(x, filters):\n    f1, f2, f3 = filters\n    \n    # Save input for skip connection\n    x_skip = x\n    \n    # First component\n    x = layers.Conv2D(f1, (1, 1))(x)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation('relu')(x)\n    \n    # Second component\n    x = layers.Conv2D(f2, (3, 3), padding='same')(x)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation('relu')(x)\n    \n    # Third component\n    x = layers.Conv2D(f3, (1, 1))(x)\n    x = layers.BatchNormalization()(x)\n    \n    # Add skip connection\n    x = layers.Add()([x, x_skip])\n    x = layers.Activation('relu')(x)\n    \n    return x\n\ndef conv_block(x, filters, stride=2):\n    f1, f2, f3 = filters\n    \n    # Save input for skip connection\n    x_skip = x\n    \n    # First component\n    x = layers.Conv2D(f1, (1, 1), strides=stride)(x)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation('relu')(x)\n    \n    # Second component\n    x = layers.Conv2D(f2, (3, 3), padding='same')(x)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation('relu')(x)\n    \n    # Third component\n    x = layers.Conv2D(f3, (1, 1))(x)\n    x = layers.BatchNormalization()(x)\n    \n    # Shortcut path\n    x_skip = layers.Conv2D(f3, (1, 1), strides=stride)(x_skip)\n    x_skip = layers.BatchNormalization()(x_skip)\n    \n    # Add skip connection\n    x = layers.Add()([x, x_skip])\n    x = layers.Activation('relu')(x)\n    \n    return x\n\ndef ResNet50(input_shape=(224, 224, 3), num_classes=1000):\n    inputs = layers.Input(shape=input_shape)\n    \n    # Stage 1\n    x = layers.Conv2D(64, (7, 7), strides=2, padding='same')(inputs)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation('relu')(x)\n    x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)\n    \n    # Stage 2\n    x = conv_block(x, [64, 64, 256], stride=1)\n    x = identity_block(x, [64, 64, 256])\n    x = identity_block(x, [64, 64, 256])\n    \n    # Stage 3\n    x = conv_block(x, [128, 128, 512])\n    for _ in range(3):\n        x = identity_block(x, [128, 128, 512])\n    \n    # Stage 4\n    x = conv_block(x, [256, 256, 1024])\n    for _ in range(5):\n        x = identity_block(x, [256, 256, 1024])\n    \n    # Stage 5\n    x = conv_block(x, [512, 512, 2048])\n    x = identity_block(x, [512, 512, 2048])\n    x = identity_block(x, [512, 512, 2048])\n    \n    # Classification head\n    x = layers.GlobalAveragePooling2D()(x)\n    outputs = layers.Dense(num_classes, activation='softmax')(x)\n    \n    model = Model(inputs, outputs)\n    return model\n\n# Usage\nmodel = ResNet50()\nmodel.summary()"
+  },
+  "useCases": [
+    {
+      "title": "Image Classification",
+      "description": "ResNet-50 is widely used for classifying images into categories",
+      "examples": ["ImageNet classification", "Medical image diagnosis", "Product categorization"],
+      "industry": "Computer Vision"
+    },
+    {
+      "title": "Transfer Learning",
+      "description": "Pre-trained ResNet-50 serves as a feature extractor for custom tasks",
+      "examples": ["Fine-tuning for specific domains", "Feature extraction for similarity search", "Backbone for detection models"],
+      "industry": "AI/ML"
+    },
+    {
+      "title": "Object Detection Backbone",
+      "description": "Used as the backbone in Faster R-CNN, Mask R-CNN, and other detection models",
+      "examples": ["Autonomous driving", "Video surveillance", "Retail analytics"],
+      "industry": "Autonomous Systems"
+    }
+  ],
+  "benchmarks": {
+    "datasets": [
+      {"name": "ImageNet", "accuracy": 76.15, "otherMetrics": {"top5": 92.87}},
+      {"name": "CIFAR-10", "accuracy": 95.3},
+      {"name": "CIFAR-100", "accuracy": 78.5}
+    ],
+    "performance": {
+      "speed": "~200ms per image on GPU (batch size 1)",
+      "memory": "~100MB model size, ~4GB GPU memory for training",
+      "accuracy": "76.15% top-1 on ImageNet"
+    }
+  },
+  "trainingTips": {
+    "hyperparameters": {
+      "learning_rate": 0.1,
+      "batch_size": 256,
+      "optimizer": "SGD with momentum (0.9)",
+      "weight_decay": 0.0001,
+      "epochs": 90,
+      "lr_schedule": "Divide by 10 at epochs 30, 60, 80"
+    },
+    "commonIssues": [
+      {
+        "problem": "Model not converging initially",
+        "solution": "Use learning rate warmup for the first few epochs"
+      },
+      {
+        "problem": "Out of memory errors",
+        "solution": "Reduce batch size or use gradient accumulation"
+      },
+      {
+        "problem": "Overfitting on small datasets",
+        "solution": "Use strong data augmentation and dropout in the FC layer"
+      }
+    ],
+    "dataRequirements": "At least 10,000 images for training from scratch. For transfer learning, 1,000+ images per class is recommended.",
+    "trainingTime": "~1-2 days on 8 GPUs for ImageNet, ~2-4 hours for CIFAR-10 on single GPU"
+  },
+  "comparisons": ["alexnet", "vgg16", "resnet101", "resnet152", "densenet121", "efficientnetb0"],
+  "resources": [
+    {
+      "type": "paper",
+      "title": "Deep Residual Learning for Image Recognition",
+      "url": "https://arxiv.org/abs/1512.03385",
+      "author": "Kaiming He et al."
+    },
+    {
+      "type": "implementation",
+      "title": "Official PyTorch Implementation",
+      "url": "https://github.com/pytorch/vision/blob/main/torchvision/models/resnet.py"
+    },
+    {
+      "type": "tutorial",
+      "title": "Understanding ResNet Architecture",
+      "url": "https://towardsdatascience.com/understanding-and-visualizing-resnets-442284831be8"
+    }
+  ],
+  "tags": ["computer-vision", "image-classification", "residual-learning", "skip-connections", "deep-learning"],
+  "difficulty": "Intermediate",
+  "computationalRequirements": {
+    "minGPU": "NVIDIA GTX 1060 (6GB)",
+    "minRAM": "8GB",
+    "recommendedGPU": "NVIDIA RTX 3090 or A100",
+    "recommendedRAM": "32GB"
+  }
+}
